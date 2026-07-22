@@ -5,10 +5,18 @@ import { prisma } from '../db';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { nextTicketNumber } from '../lib/ticketNumber';
 import { calculateDueDate } from '../lib/dueDate';
+import { generateQuoteToken } from '../lib/quoteToken';
 
 const router = Router();
 
-const userSummarySelect = { id: true, name: true, email: true, role: true, colour: true } satisfies Prisma.UserSelect;
+const userSummarySelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  colour: true,
+  requiresTimesheetCheck: true
+} satisfies Prisma.UserSelect;
 
 const actionInclude = {
   client: true,
@@ -67,6 +75,12 @@ router.get('/', requireAuth, async (req, res) => {
       break;
     case 'unallocated':
       where.assignedToId = null;
+      break;
+    case 'quote-needed':
+      where.quoteStatus = 'NEEDS_MANUAL_QUOTE';
+      break;
+    case 'approval-pending':
+      where.quoteStatus = 'PENDING_APPROVAL';
       break;
   }
 
@@ -133,9 +147,44 @@ router.post('/', requireAuth, async (req, res) => {
     clientId = client.id;
   }
 
+  const requestType = await prisma.requestType.findUnique({ where: { id: data.requestTypeId } });
+  if (!requestType) {
+    res.status(400).json({ error: 'Invalid request type' });
+    return;
+  }
+
+  // Quote behaviour drives allocation: MANUAL (new/unpriced work, always true for
+  // "Other") force-allocates to Stephan and flags it for him to quote; AUTO (a
+  // priced request type) drafts a client-facing quote up front and parks it under
+  // Approval Pending; NEVER leaves the action to be allocated/worked as normal.
+  let assignedToId = data.assignedToId ?? null;
+  let quoteStatus: 'NOT_NEEDED' | 'NEEDS_MANUAL_QUOTE' | 'PENDING_APPROVAL' = 'NOT_NEEDED';
+  let quoteAmount: Prisma.Decimal | null = null;
+  let quoteToken: string | null = null;
+  let quoteNote: string | null = null;
+
+  if (requestType.quoteBehavior === 'MANUAL') {
+    const stephan = await prisma.user.findFirst({ where: { name: 'Stephan' } });
+    if (stephan) assignedToId = stephan.id;
+    quoteStatus = 'NEEDS_MANUAL_QUOTE';
+    quoteNote = 'Flagged for Stephan — new/unpriced request, needs a quote drawn up';
+  } else if (requestType.quoteBehavior === 'AUTO') {
+    quoteToken = generateQuoteToken();
+    quoteAmount = requestType.price;
+    quoteStatus = 'PENDING_APPROVAL';
+    quoteNote = 'Quote drafted and awaiting client approval';
+  }
+
   const ticketNumber = await nextTicketNumber();
   const dueAt = calculateDueDate(data.turnaround, data.customTurnaroundHours ?? null);
-  const status = data.assignedToId ? 'ALLOCATED' : 'NEW';
+  const status: 'ALLOCATED' | 'NEW' = assignedToId ? 'ALLOCATED' : 'NEW';
+
+  const historyEntries: Prisma.StatusHistoryUncheckedCreateWithoutActionInput[] = [
+    { toStatus: status, changedById: req.user!.id, note: 'Action created' }
+  ];
+  if (quoteNote) {
+    historyEntries.push({ toStatus: status, changedById: req.user!.id, note: quoteNote });
+  }
 
   const action = await prisma.action.create({
     data: {
@@ -149,16 +198,19 @@ router.post('/', requireAuth, async (req, res) => {
       requestTypeId: data.requestTypeId,
       otherRequestDetail: data.otherRequestDetail,
       description: data.description,
-      assignedToId: data.assignedToId ?? null,
+      assignedToId,
       priority: data.priority,
       turnaround: data.turnaround,
       customTurnaroundHours: data.customTurnaroundHours,
       dueAt,
       status,
       sendAcknowledgement: data.sendAcknowledgement ?? false,
+      quoteStatus,
+      quoteAmount,
+      quoteToken,
       createdById: req.user!.id,
       statusHistory: {
-        create: [{ toStatus: status, changedById: req.user!.id, note: 'Action created' }]
+        create: historyEntries
       }
     },
     include: actionInclude
@@ -174,7 +226,8 @@ const updateSchema = z.object({
   requestTypeId: z.number().optional(),
   description: z.string().min(1).optional(),
   priority: z.enum(['CRITICAL', 'HIGH', 'NORMAL', 'LOW']).optional(),
-  assignedToId: z.number().nullable().optional()
+  assignedToId: z.number().nullable().optional(),
+  addedToTimesheet: z.boolean().optional()
 });
 
 router.patch('/:id', requireAuth, async (req, res) => {
@@ -241,6 +294,17 @@ router.post('/:id/status', requireAuth, async (req, res) => {
   }
 
   const { status, note } = parsed.data;
+
+  // Main purpose of this app: ad-hoc work for Daniella/Sunanne can't be marked
+  // complete until it's been ticked off as added to the time sheet.
+  if (status === 'COMPLETED' && existing.assignedToId) {
+    const assignee = await prisma.user.findUnique({ where: { id: existing.assignedToId } });
+    if (assignee?.requiresTimesheetCheck && !existing.addedToTimesheet) {
+      res.status(400).json({ error: 'Add to Time Sheet must be checked before this action can be completed.' });
+      return;
+    }
+  }
+
   const action = await prisma.action.update({
     where: { id },
     data: {
@@ -288,6 +352,52 @@ router.post('/:id/snooze', requireAuth, async (req, res) => {
           toStatus: 'SNOOZED',
           changedById: req.user!.id,
           note: `Snoozed until ${new Date(parsed.data.snoozeUntil).toLocaleDateString()} — ${parsed.data.reason}`
+        }]
+      }
+    },
+    include: actionInclude
+  });
+
+  res.json({ action });
+});
+
+const quoteStatusSchema = z.object({
+  quoteStatus: z.enum(['NOT_NEEDED', 'NEEDS_MANUAL_QUOTE', 'PENDING_APPROVAL', 'ACCEPTED', 'DECLINED']),
+  quoteAmount: z.number().nullable().optional()
+});
+
+// Lets Stephan (or an admin) move a manually-quoted action through its
+// lifecycle by hand, since a MANUAL quote has no client-facing accept/decline
+// link — e.g. clear NEEDS_MANUAL_QUOTE to PENDING_APPROVAL once he's sent the
+// quote himself, then later record ACCEPTED/DECLINED after following up.
+router.post('/:id/quote-status', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const parsed = quoteStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid quote status' });
+    return;
+  }
+  const existing = await prisma.action.findFirst({ where: { id, deletedAt: null } });
+  if (!existing) {
+    res.status(404).json({ error: 'Action not found' });
+    return;
+  }
+
+  const { quoteStatus, quoteAmount } = parsed.data;
+  const isResponse = quoteStatus === 'ACCEPTED' || quoteStatus === 'DECLINED';
+
+  const action = await prisma.action.update({
+    where: { id },
+    data: {
+      quoteStatus,
+      quoteAmount: quoteAmount === undefined ? undefined : quoteAmount,
+      quoteRespondedAt: isResponse ? new Date() : existing.quoteRespondedAt,
+      statusHistory: {
+        create: [{
+          fromStatus: existing.status,
+          toStatus: existing.status,
+          changedById: req.user!.id,
+          note: `Quote status updated to ${quoteStatus}`
         }]
       }
     },

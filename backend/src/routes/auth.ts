@@ -30,7 +30,14 @@ router.post('/login', async (req, res) => {
     return;
   }
 
-  const authUser = { id: user.id, name: user.name, email: user.email, role: user.role, colour: user.colour };
+  const authUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    colour: user.colour,
+    requiresTimesheetCheck: user.requiresTimesheetCheck
+  };
   const token = signToken(authUser);
   res.cookie('token', token, {
     httpOnly: true,

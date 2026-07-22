@@ -10,6 +10,7 @@ export interface AuthUser {
   email: string;
   role: Role;
   colour: string;
+  requiresTimesheetCheck: boolean;
 }
 
 declare global {

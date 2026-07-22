@@ -9,6 +9,7 @@ import clientRoutes from './routes/clients';
 import requestTypeRoutes from './routes/requestTypes';
 import actionRoutes from './routes/actions';
 import dashboardRoutes from './routes/dashboard';
+import quoteRoutes from './routes/quotes';
 
 const app = express();
 
@@ -24,6 +25,8 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/request-types', requestTypeRoutes);
 app.use('/api/actions', actionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+// No requireAuth here — this is the client-facing quote accept/decline link.
+app.use('/api/quotes', quoteRoutes);
 
 // In production the frontend is built and served from the same service as
 // the API, so there's one URL and no CORS to think about. Locally, the

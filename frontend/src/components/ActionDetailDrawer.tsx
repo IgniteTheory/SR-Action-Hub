@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { api, ApiError } from '../api/client';
-import type { Action, ActionStatus, UserSummary } from '../api/types';
+import type { Action, ActionStatus, QuoteStatus, UserSummary } from '../api/types';
 import { useAuth } from '../context/AuthContext';
 import {
   COMM_SOURCE_LABELS,
+  formatCurrency,
   formatDate,
   formatDateTime,
   PRIORITY_LABELS,
+  QUOTE_STATUS_LABELS,
   STATUS_LABELS,
   TURNAROUND_LABELS,
 } from '../utils/format';
@@ -32,6 +34,9 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
   const [showSnooze, setShowSnooze] = useState(false);
   const [snoozeUntil, setSnoozeUntil] = useState('');
   const [snoozeReason, setSnoozeReason] = useState('Waiting for documents');
+  const [quoteAmountInput, setQuoteAmountInput] = useState(action.quoteAmount ?? '');
+
+  const timesheetRequired = !!action.assignedTo?.requiresTimesheetCheck;
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true);
@@ -69,6 +74,25 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
     run(() => api.delete(`/actions/${action.id}`)).then(() => onClose());
   }
 
+  function toggleTimesheet(checked: boolean) {
+    run(() => api.patch(`/actions/${action.id}`, { addedToTimesheet: checked }));
+  }
+
+  function setQuoteStatus(quoteStatus: QuoteStatus, quoteAmount?: number | null) {
+    run(() => api.post(`/actions/${action.id}/quote-status`, { quoteStatus, quoteAmount }));
+  }
+
+  function sendManualQuote() {
+    const amount = quoteAmountInput === '' ? null : Number(quoteAmountInput);
+    setQuoteStatus('PENDING_APPROVAL', amount);
+  }
+
+  const quoteLink = action.quoteToken ? `${window.location.origin}/quote/${action.quoteToken}` : null;
+
+  function copyQuoteLink() {
+    if (quoteLink) navigator.clipboard.writeText(quoteLink);
+  }
+
   return (
     <div className="drawer-overlay" onClick={onClose}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
@@ -99,6 +123,54 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
         <h3>Description</h3>
         <p style={{ fontSize: 13.5, margin: 0 }}>{action.description}</p>
 
+        {action.quoteStatus !== 'NOT_NEEDED' && (
+          <>
+            <h3>Quote</h3>
+            <div className="quote-panel">
+              <span className={`quote-badge ${action.quoteStatus}`}>{QUOTE_STATUS_LABELS[action.quoteStatus]}</span>
+              {action.quoteAmount && <div className="quote-amount" style={{ marginTop: 8 }}>{formatCurrency(action.quoteAmount)}</div>}
+              {action.quoteRespondedAt && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                  Responded {formatDateTime(action.quoteRespondedAt)}
+                </div>
+              )}
+
+              {action.quoteStatus === 'NEEDS_MANUAL_QUOTE' && (
+                <div style={{ marginTop: 10 }}>
+                  <div className="field">
+                    <label>Quote amount (optional)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={quoteAmountInput}
+                      onChange={(e) => setQuoteAmountInput(e.target.value)}
+                      placeholder="R"
+                    />
+                  </div>
+                  <button className="btn btn-primary btn-sm" onClick={sendManualQuote} disabled={busy}>
+                    Mark Quote Sent
+                  </button>
+                </div>
+              )}
+
+              {action.quoteStatus === 'PENDING_APPROVAL' && (
+                <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {quoteLink && (
+                    <button className="btn btn-ghost btn-sm" onClick={copyQuoteLink}>Copy Client Link</button>
+                  )}
+                  <button className="btn btn-secondary btn-sm" onClick={() => setQuoteStatus('ACCEPTED')} disabled={busy}>
+                    Mark Accepted
+                  </button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setQuoteStatus('DECLINED')} disabled={busy}>
+                    Mark Declined
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         <h3>Assignment</h3>
         <select
           value={action.assignedToId ?? ''}
@@ -110,6 +182,18 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
             <option key={u.id} value={u.id}>{u.name}</option>
           ))}
         </select>
+
+        {timesheetRequired && (
+          <label className={`checkbox-field${!action.addedToTimesheet ? ' required-unchecked' : ''}`} style={{ marginTop: 10 }}>
+            <input
+              type="checkbox"
+              checked={action.addedToTimesheet}
+              onChange={(e) => toggleTimesheet(e.target.checked)}
+              disabled={busy}
+            />
+            Added to Time Sheet {!action.addedToTimesheet && '— required before this can be completed'}
+          </label>
+        )}
 
         <h3>Status</h3>
         <select value={action.status} onChange={(e) => changeStatus(e.target.value as ActionStatus)} disabled={busy}>

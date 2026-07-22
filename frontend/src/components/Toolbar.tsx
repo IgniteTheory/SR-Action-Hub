@@ -14,6 +14,8 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'snoozed', label: 'Snoozed' },
   { key: 'unallocated', label: 'Unallocated' },
   { key: 'completed', label: 'Completed' },
+  { key: 'quote-needed', label: 'Quote Needed' },
+  { key: 'approval-pending', label: 'Approval Pending' },
 ];
 
 export default function Toolbar({ search, onSearchChange, filter, onFilterChange }: Props) {

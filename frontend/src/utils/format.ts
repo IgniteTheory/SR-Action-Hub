@@ -1,4 +1,4 @@
-import type { ActionStatus, CommunicationSource, Priority, Turnaround } from '../api/types';
+import type { ActionStatus, CommunicationSource, Priority, QuoteStatus, Turnaround } from '../api/types';
 
 export function initials(name: string): string {
   return name
@@ -51,6 +51,19 @@ export const TURNAROUND_LABELS: Record<Turnaround, string> = {
   WEEK_1: '1 Week',
   CUSTOM: 'Custom',
 };
+
+export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+  NOT_NEEDED: 'No Quote Needed',
+  NEEDS_MANUAL_QUOTE: 'Quote Needed',
+  PENDING_APPROVAL: 'Approval Pending',
+  ACCEPTED: 'Quote Accepted',
+  DECLINED: 'Quote Declined',
+};
+
+export function formatCurrency(amount: string | number): string {
+  const n = typeof amount === 'string' ? Number(amount) : amount;
+  return `R ${n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 export const COMM_SOURCE_LABELS: Record<CommunicationSource, string> = {
   PHONE: 'Phone',

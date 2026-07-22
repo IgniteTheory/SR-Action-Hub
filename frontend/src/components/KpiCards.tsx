@@ -24,6 +24,10 @@ export default function KpiCards({ kpis }: { kpis: DashboardKpis | null }) {
         <div className="value">{kpis.newActions}</div>
         <div className="label">📥 New Actions</div>
       </div>
+      <div className="kpi-card approval">
+        <div className="value">{kpis.approvalPending}</div>
+        <div className="label">🧾 Approval Pending</div>
+      </div>
       <div className="kpi-card">
         <div className="value">{kpis.avgTurnaroundHours != null ? `${kpis.avgTurnaroundHours}h` : '—'}</div>
         <div className="label">📈 Avg Turnaround</div>

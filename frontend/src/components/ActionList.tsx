@@ -1,5 +1,5 @@
 import type { Action } from '../api/types';
-import { formatDateTime, initials, PRIORITY_LABELS, STATUS_LABELS } from '../utils/format';
+import { formatDateTime, initials, PRIORITY_LABELS, QUOTE_STATUS_LABELS, STATUS_LABELS } from '../utils/format';
 
 interface Props {
   actions: Action[];
@@ -16,10 +16,10 @@ export default function ActionList({ actions, onSelect }: Props) {
   return (
     <div className="action-list">
       {actions.map((a) => {
-        const isStephan = a.assignedTo?.name === 'Stephan';
+        const needsManualQuote = a.quoteStatus === 'NEEDS_MANUAL_QUOTE';
         const overdue = new Date(a.dueAt).getTime() < now && a.status !== 'COMPLETED' && a.status !== 'CANCELLED';
         return (
-          <div key={a.id} className={`action-row${isStephan ? ' stephan' : ''}`} onClick={() => onSelect(a)}>
+          <div key={a.id} className={`action-row${needsManualQuote ? ' quote-flag' : ''}`} onClick={() => onSelect(a)}>
             <div className="ticket">{a.ticketNumber}</div>
             <div className="main-info">
               <div className="client">{a.client.name}</div>
@@ -27,6 +27,9 @@ export default function ActionList({ actions, onSelect }: Props) {
             </div>
             <div>
               <span className={`badge priority-${a.priority}`}>{PRIORITY_LABELS[a.priority]}</span>
+              {a.quoteStatus !== 'NOT_NEEDED' && (
+                <span className={`quote-badge ${a.quoteStatus}`}>{QUOTE_STATUS_LABELS[a.quoteStatus]}</span>
+              )}
             </div>
             <div className="assignee">
               {a.assignedTo ? (

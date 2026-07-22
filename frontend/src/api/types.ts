@@ -18,12 +18,17 @@ export type ActionStatus =
   | 'COMPLETED'
   | 'CANCELLED';
 
+export type QuoteBehavior = 'NEVER' | 'MANUAL' | 'AUTO';
+
+export type QuoteStatus = 'NOT_NEEDED' | 'NEEDS_MANUAL_QUOTE' | 'PENDING_APPROVAL' | 'ACCEPTED' | 'DECLINED';
+
 export interface UserSummary {
   id: number;
   name: string;
   email: string;
   role: Role;
   colour: string;
+  requiresTimesheetCheck: boolean;
 }
 
 export interface Client {
@@ -46,6 +51,8 @@ export interface RequestType {
   id: number;
   name: string;
   isActive: boolean;
+  quoteBehavior: QuoteBehavior;
+  price: string | null;
 }
 
 export interface StatusHistoryEntry {
@@ -83,6 +90,11 @@ export interface Action {
   snoozeUntil: string | null;
   snoozeReason: string | null;
   sendAcknowledgement: boolean;
+  quoteStatus: QuoteStatus;
+  quoteAmount: string | null;
+  quoteToken: string | null;
+  quoteRespondedAt: string | null;
+  addedToTimesheet: boolean;
   createdById: number;
   createdBy: UserSummary;
   createdAt: string;
@@ -98,5 +110,6 @@ export interface DashboardKpis {
   waiting: number;
   completedToday: number;
   newActions: number;
+  approvalPending: number;
   avgTurnaroundHours: number | null;
 }

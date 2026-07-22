@@ -57,15 +57,31 @@ enum ActionStatus {
   CANCELLED
 }
 
+// How a Request Type's quote step works when an Action is created against it.
+enum QuoteBehavior {
+  NEVER  // routine ad-hoc work, no quote involved
+  MANUAL // Stephan must draw up and send a quote himself (new/unpriced work)
+  AUTO   // a price is on file; the system drafts a quote and tracks client approval
+}
+
+enum QuoteStatus {
+  NOT_NEEDED
+  NEEDS_MANUAL_QUOTE
+  PENDING_APPROVAL
+  ACCEPTED
+  DECLINED
+}
+
 model User {
-  id           Int      @id @default(autoincrement())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         Role     @default(STAFF)
-  colour       String   @default("#1f7a4d")
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  id                    Int      @id @default(autoincrement())
+  name                  String
+  email                 String   @unique
+  passwordHash          String
+  role                  Role     @default(STAFF)
+  colour                String   @default("#1f7a4d")
+  active                Boolean  @default(true)
+  requiresTimesheetCheck Boolean @default(false)
+  createdAt             DateTime @default(now())
 
   createdActions   Action[]        @relation("CreatedBy")
   assignedActions  Action[]        @relation("AssignedTo")
@@ -75,11 +91,17 @@ model User {
 }
 
 model Client {
-  id        Int      @id @default(autoincrement())
-  name      String
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  name           String   @unique
+  entityType     String?
+  active         Boolean  @default(true)
+  registrationNr String?
+  vatNr          String?
+  taxNr          String?
+  payeNr         String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   contacts Contact[]
   actions  Action[]
@@ -102,9 +124,11 @@ model Contact {
 }
 
 model RequestType {
-  id       Int     @id @default(autoincrement())
-  name     String  @unique
-  isActive Boolean @default(true)
+  id            Int           @id @default(autoincrement())
+  name          String        @unique
+  isActive      Boolean       @default(true)
+  quoteBehavior QuoteBehavior @default(NEVER)
+  price         Decimal?      @db.Decimal(10, 2)
 
   actions Action[]
 
@@ -146,6 +170,13 @@ model Action {
   snoozeReason           String?
 
   sendAcknowledgement    Boolean    @default(false)
+
+  quoteStatus            QuoteStatus @default(NOT_NEEDED)
+  quoteAmount             Decimal?   @db.Decimal(10, 2)
+  quoteToken              String?    @unique
+  quoteRespondedAt        DateTime?
+
+  addedToTimesheet       Boolean    @default(false)
 
   createdById            Int
   createdAt              DateTime   @default(now())
