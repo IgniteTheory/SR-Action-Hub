@@ -2,13 +2,13 @@ databases:
   - name: sr-action-hub-db
     databaseName: sr_action_hub
     user: sraction
+    plan: free
 
 services:
   - type: web
     name: sr-action-hub
     runtime: node
     plan: free
-    rootDir: .
     buildCommand: "cd frontend && npm install && npm run build && cd ../backend && npm install && npx prisma generate && npm run build"
     startCommand: "cd backend && npx prisma migrate deploy && node dist/server.js"
     envVars:
