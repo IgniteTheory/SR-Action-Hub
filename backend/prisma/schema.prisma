@@ -1,0 +1,181 @@
+// Phase 1 schema. Targets Postgres for fast local development.
+// To move to SQL Server: change `provider` below to "sqlserver" and point
+// DATABASE_URL at the real instance, then re-run `prisma migrate dev`.
+// The schema avoids Postgres-only features so the move is a config change.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMINISTRATOR
+  STAFF
+}
+
+enum CommunicationSource {
+  PHONE
+  EMAIL
+  WHATSAPP
+  WALK_IN
+  TEAMS
+  INTERNAL
+  OTHER
+}
+
+enum Priority {
+  CRITICAL
+  HIGH
+  NORMAL
+  LOW
+}
+
+enum Turnaround {
+  URGENT
+  HOURS_2_3
+  TODAY
+  DAY_1
+  DAYS_2_3
+  WEEK_1
+  CUSTOM
+}
+
+enum ActionStatus {
+  NEW
+  ALLOCATED
+  IN_PROGRESS
+  WAITING_CLIENT
+  WAITING_SARS
+  WAITING_BANK
+  WAITING_THIRD_PARTY
+  SNOOZED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(STAFF)
+  colour       String   @default("#1f7a4d")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  createdActions   Action[]        @relation("CreatedBy")
+  assignedActions  Action[]        @relation("AssignedTo")
+  statusChanges    StatusHistory[]
+
+  @@map("users")
+}
+
+model Client {
+  id        Int      @id @default(autoincrement())
+  name      String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts Contact[]
+  actions  Action[]
+
+  @@map("clients")
+}
+
+model Contact {
+  id        Int      @id @default(autoincrement())
+  clientId  Int
+  name      String
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+
+  client  Client   @relation(fields: [clientId], references: [id])
+  actions Action[]
+
+  @@map("contacts")
+}
+
+model RequestType {
+  id       Int     @id @default(autoincrement())
+  name     String  @unique
+  isActive Boolean @default(true)
+
+  actions Action[]
+
+  @@map("request_types")
+}
+
+model TicketCounter {
+  year       Int @id
+  lastNumber Int @default(0)
+
+  @@map("ticket_counters")
+}
+
+model Action {
+  id                    Int       @id @default(autoincrement())
+  ticketNumber          String    @unique
+
+  clientId              Int
+  contactId             Int?
+  contactPerson         String
+  telephone              String?
+  email                 String?
+
+  communicationSource   CommunicationSource
+  requestTypeId         Int
+  otherRequestDetail    String?
+
+  description           String
+
+  assignedToId          Int?
+  priority              Priority   @default(NORMAL)
+  turnaround             Turnaround @default(TODAY)
+  customTurnaroundHours  Int?
+  dueAt                  DateTime
+
+  status                ActionStatus @default(NEW)
+
+  snoozeUntil            DateTime?
+  snoozeReason           String?
+
+  sendAcknowledgement    Boolean    @default(false)
+
+  createdById            Int
+  createdAt              DateTime   @default(now())
+  updatedAt               DateTime  @updatedAt
+  completedAt             DateTime?
+  deletedAt               DateTime?
+  deletedById              Int?
+
+  client       Client       @relation(fields: [clientId], references: [id])
+  contact      Contact?     @relation(fields: [contactId], references: [id])
+  requestType  RequestType  @relation(fields: [requestTypeId], references: [id])
+  assignedTo   User?        @relation("AssignedTo", fields: [assignedToId], references: [id])
+  createdBy    User         @relation("CreatedBy", fields: [createdById], references: [id])
+
+  statusHistory StatusHistory[]
+
+  @@map("actions")
+}
+
+model StatusHistory {
+  id          Int          @id @default(autoincrement())
+  actionId    Int
+  fromStatus  ActionStatus?
+  toStatus    ActionStatus
+  changedById Int
+  changedAt   DateTime     @default(now())
+  note        String?
+
+  action    Action @relation(fields: [actionId], references: [id])
+  changedBy User   @relation(fields: [changedById], references: [id])
+
+  @@map("status_history")
+}
