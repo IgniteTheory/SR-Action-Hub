@@ -9,7 +9,7 @@ services:
     name: sr-action-hub
     runtime: node
     plan: free
-    buildCommand: "cd frontend && npm install && npm run build && cd ../backend && npm install && npx prisma generate && npm run build"
+    buildCommand: "cd frontend && npm install --include=dev && npm run build && cd ../backend && npm install --include=dev && npx prisma generate && npm run build"
     startCommand: "cd backend && npx prisma migrate deploy && node dist/server.js"
     envVars:
       - key: DATABASE_URL
@@ -18,5 +18,3 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
-      - key: NODE_ENV
-        value: production
