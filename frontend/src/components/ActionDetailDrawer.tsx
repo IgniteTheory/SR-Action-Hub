@@ -132,6 +132,21 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
         <div className="detail-row"><span>Due</span><b>{formatDateTime(action.dueAt)}</b></div>
         <div className="detail-row"><span>Created by</span><b>{action.createdBy.name}</b></div>
 
+        {action.sendAcknowledgement && (
+          <div style={{ fontSize: 12, margin: '6px 0' }}>
+            {action.acknowledgementEmailSentAt && (
+              <span style={{ color: 'var(--green-dark)' }}>
+                ✓ Acknowledgement sent {formatDateTime(action.acknowledgementEmailSentAt)}
+              </span>
+            )}
+            {action.acknowledgementEmailError && (
+              <span style={{ color: 'var(--red)' }}>
+                ⚠ Acknowledgement email failed — {action.acknowledgementEmailError}
+              </span>
+            )}
+          </div>
+        )}
+
         <h3>Description</h3>
         <p style={{ fontSize: 13.5, margin: 0 }}>{action.description}</p>
 
@@ -199,16 +214,28 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
               )}
 
               {action.quoteStatus === 'PENDING_APPROVAL' && (
-                <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {quoteLink && (
-                    <button className="btn btn-ghost btn-sm" onClick={copyQuoteLink}>Copy Client Link</button>
+                <div style={{ marginTop: 10 }}>
+                  {action.quoteEmailSentAt && (
+                    <div style={{ fontSize: 12, color: 'var(--green-dark)', marginBottom: 8 }}>
+                      ✓ Emailed to client {formatDateTime(action.quoteEmailSentAt)}
+                    </div>
                   )}
-                  <button className="btn btn-secondary btn-sm" onClick={() => setQuoteStatus('ACCEPTED')} disabled={busy}>
-                    Mark Accepted
-                  </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setQuoteStatus('DECLINED')} disabled={busy}>
-                    Mark Declined
-                  </button>
+                  {action.quoteEmailError && (
+                    <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 8 }}>
+                      ⚠ Quote email failed — {action.quoteEmailError}. Send the link manually instead.
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {quoteLink && (
+                      <button className="btn btn-ghost btn-sm" onClick={copyQuoteLink}>Copy Client Link</button>
+                    )}
+                    <button className="btn btn-secondary btn-sm" onClick={() => setQuoteStatus('ACCEPTED')} disabled={busy}>
+                      Mark Accepted
+                    </button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setQuoteStatus('DECLINED')} disabled={busy}>
+                      Mark Declined
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

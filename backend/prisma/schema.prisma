@@ -172,11 +172,15 @@ model Action {
   snoozeReason           String?
 
   sendAcknowledgement    Boolean    @default(false)
+  acknowledgementEmailSentAt DateTime?
+  acknowledgementEmailError  String?
 
   quoteStatus            QuoteStatus @default(NOT_NEEDED)
   quoteAmount             Decimal?   @db.Decimal(10, 2)
   quoteToken              String?    @unique
   quoteRespondedAt        DateTime?
+  quoteEmailSentAt        DateTime?
+  quoteEmailError         String?
 
   addedToTimesheet       Boolean    @default(false)
 

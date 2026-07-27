@@ -35,6 +35,8 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
   const [customHours, setCustomHours] = useState(24);
   const [customDueDate, setCustomDueDate] = useState('');
   const [sendAcknowledgement, setSendAcknowledgement] = useState(false);
+  const [needsQuote, setNeedsQuote] = useState(false);
+  const [quoteFeeInput, setQuoteFeeInput] = useState('');
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -48,6 +50,19 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
 
   const selectedType = requestTypes.find((t) => t.id === requestTypeId);
   const isOther = selectedType?.name === 'Other';
+
+  // Pre-fill the billing choice from the request type's usual default
+  // whenever the type changes — staff can still override per ticket below.
+  useEffect(() => {
+    if (!selectedType) return;
+    if (selectedType.name === 'Other') {
+      setNeedsQuote(true);
+      setQuoteFeeInput('');
+      return;
+    }
+    setNeedsQuote(selectedType.quoteBehavior !== 'NEVER');
+    setQuoteFeeInput(selectedType.price ?? '');
+  }, [requestTypeId]);
 
   async function handleSubmit() {
     setError(null);
@@ -101,6 +116,8 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
         customTurnaroundHours: turnaround === 'CUSTOM' ? customHours : undefined,
         customDueDate: turnaround === 'CUSTOM_DATE' ? new Date(customDueDate).toISOString() : undefined,
         sendAcknowledgement,
+        needsQuote: isOther ? true : needsQuote,
+        quoteFeeInput: needsQuote && quoteFeeInput !== '' ? Number(quoteFeeInput) : null,
       });
       onCreated();
     } catch (err) {
@@ -199,6 +216,48 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
           <label>Description</label>
           <textarea id="ca_description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
+
+        {requestTypeId !== '' && (
+          <>
+            <h3>Billing</h3>
+            <div className="field-row" style={{ marginBottom: 6 }}>
+              <label className="checkbox-field" style={{ margin: 0 }}>
+                <input
+                  type="radio"
+                  name="ca_needs_quote"
+                  checked={!needsQuote}
+                  disabled={isOther}
+                  onChange={() => setNeedsQuote(false)}
+                />
+                Included in subscription
+              </label>
+              <label className="checkbox-field" style={{ margin: 0 }}>
+                <input
+                  type="radio"
+                  name="ca_needs_quote"
+                  checked={needsQuote}
+                  disabled={isOther}
+                  onChange={() => setNeedsQuote(true)}
+                />
+                Needs a quote
+              </label>
+            </div>
+            {needsQuote && (
+              <div className="field">
+                <label>Fee (leave blank for Stephan to quote personally)</label>
+                <input
+                  id="ca_quote_fee"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={quoteFeeInput}
+                  onChange={(e) => setQuoteFeeInput(e.target.value)}
+                  placeholder="R"
+                />
+              </div>
+            )}
+          </>
+        )}
 
         <h3>Assignment</h3>
         <div className="field-row">

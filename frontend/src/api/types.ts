@@ -90,10 +90,14 @@ export interface Action {
   snoozeUntil: string | null;
   snoozeReason: string | null;
   sendAcknowledgement: boolean;
+  acknowledgementEmailSentAt: string | null;
+  acknowledgementEmailError: string | null;
   quoteStatus: QuoteStatus;
   quoteAmount: string | null;
   quoteToken: string | null;
   quoteRespondedAt: string | null;
+  quoteEmailSentAt: string | null;
+  quoteEmailError: string | null;
   addedToTimesheet: boolean;
   completionEmailSentAt: string | null;
   completionEmailError: string | null;

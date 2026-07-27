@@ -13,6 +13,10 @@ import quoteRoutes from './routes/quotes';
 
 const app = express();
 
+// Behind Render's proxy — trust X-Forwarded-Proto so req.protocol reports
+// "https" correctly (used to build the quote links we email to clients).
+app.set('trust proxy', 1);
+
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(cookieParser());

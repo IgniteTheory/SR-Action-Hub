@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
@@ -6,7 +6,7 @@ import { requireAdmin, requireAuth } from '../middleware/auth';
 import { nextTicketNumber } from '../lib/ticketNumber';
 import { calculateDueDate } from '../lib/dueDate';
 import { generateQuoteToken } from '../lib/quoteToken';
-import { sendCompletionEmail } from '../lib/email';
+import { sendCompletionEmail, sendAcknowledgementEmail, sendQuoteEmail } from '../lib/email';
 
 const router = Router();
 
@@ -26,6 +26,47 @@ const actionInclude = {
   assignedTo: { select: userSummarySelect },
   createdBy: { select: userSummarySelect }
 } satisfies Prisma.ActionInclude;
+
+type ActionWithIncludes = Prisma.ActionGetPayload<{ include: typeof actionInclude }>;
+
+// Emails the client the quote + approve/decline link whenever a quote reaches
+// PENDING_APPROVAL, whether that's Stephan approving an internally-drafted
+// quote or sending a manual one himself. Never throws — failures are
+// recorded on the action instead of breaking whatever request triggered it.
+async function attemptSendQuoteEmail(action: ActionWithIncludes, req: Request): Promise<ActionWithIncludes> {
+  if (!action.email || !action.quoteToken) return action;
+
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const quoteLink = `${baseUrl}/quote/${action.quoteToken}`;
+  const quoteAmount = action.quoteAmount
+    ? `R ${Number(action.quoteAmount).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : null;
+
+  try {
+    await sendQuoteEmail({
+      ticketNumber: action.ticketNumber,
+      contactName: action.contactPerson,
+      contactEmail: action.email,
+      description: action.description,
+      quoteAmount,
+      quoteLink
+    });
+    console.log(`[quote-email] Sent for ${action.ticketNumber}`);
+    return prisma.action.update({
+      where: { id: action.id },
+      data: { quoteEmailSentAt: new Date(), quoteEmailError: null },
+      include: actionInclude
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to send quote email';
+    console.error(`[quote-email] Failed for ${action.ticketNumber}:`, err);
+    return prisma.action.update({
+      where: { id: action.id },
+      data: { quoteEmailError: message },
+      include: actionInclude
+    });
+  }
+}
 
 router.get('/', requireAuth, async (req, res) => {
   const { search, status, assignedToId, priority, filter } = req.query as Record<string, string | undefined>;
@@ -130,7 +171,12 @@ const createSchema = z.object({
   turnaround: z.enum(['URGENT', 'HOURS_2_3', 'TODAY', 'DAY_1', 'DAYS_2_3', 'WEEK_1', 'CUSTOM', 'CUSTOM_DATE']),
   customTurnaroundHours: z.number().optional(),
   customDueDate: z.string().optional(),
-  sendAcknowledgement: z.boolean().optional()
+  sendAcknowledgement: z.boolean().optional(),
+  // Explicit per-ticket override of "is this covered by the client's
+  // subscription, or does it need a quote?" — falls back to the request
+  // type's usual default when omitted, so routine work needs no extra click.
+  needsQuote: z.boolean().optional(),
+  quoteFeeInput: z.number().nullable().optional()
 });
 
 router.post('/', requireAuth, async (req, res) => {
@@ -158,26 +204,34 @@ router.post('/', requireAuth, async (req, res) => {
     return;
   }
 
-  // Quote behaviour drives allocation: MANUAL (new/unpriced work, always true for
-  // "Other") force-allocates to Stephan and flags it for him to quote; AUTO (a
-  // priced request type) drafts a quote from the price list, but it sits with
-  // Stephan for internal approval first — the client-facing link only gets
-  // created once he approves (see POST /:id/approve-quote); NEVER leaves the
-  // action to be allocated/worked as normal.
+  // "Is this covered by the client's subscription, or does it need a quote?"
+  // — asked explicitly per ticket, pre-filled from the request type's usual
+  // default (so routine work needs no extra click), but always overridable.
+  // "Other" is unclassified work by definition, so it always needs a quote.
+  // A fee entered (typed in now, or pulled from the request type's price
+  // list) sends it to Stephan for a quick internal approval before it's
+  // emailed to the client; leaving the fee blank flags Stephan to price it
+  // himself from scratch.
+  const forcedQuote = requestType.name === 'Other';
+  const needsQuote = forcedQuote ? true : (data.needsQuote ?? requestType.quoteBehavior !== 'NEVER');
+
   let assignedToId = data.assignedToId ?? null;
   let quoteStatus: 'NOT_NEEDED' | 'NEEDS_MANUAL_QUOTE' | 'NEEDS_INTERNAL_APPROVAL' = 'NOT_NEEDED';
   let quoteAmount: Prisma.Decimal | null = null;
   let quoteNote: string | null = null;
 
-  if (requestType.quoteBehavior === 'MANUAL') {
-    const stephan = await prisma.user.findFirst({ where: { name: 'Stephan' } });
-    if (stephan) assignedToId = stephan.id;
-    quoteStatus = 'NEEDS_MANUAL_QUOTE';
-    quoteNote = 'Flagged for Stephan — new/unpriced request, needs a quote drawn up';
-  } else if (requestType.quoteBehavior === 'AUTO') {
-    quoteAmount = requestType.price;
-    quoteStatus = 'NEEDS_INTERNAL_APPROVAL';
-    quoteNote = 'Quote drafted from the price list — awaiting Stephan’s approval before it’s sent to the client';
+  if (needsQuote) {
+    const feeInput = data.quoteFeeInput ?? (requestType.price != null ? Number(requestType.price) : null);
+    if (feeInput != null) {
+      quoteAmount = new Prisma.Decimal(feeInput);
+      quoteStatus = 'NEEDS_INTERNAL_APPROVAL';
+      quoteNote = 'Quote drafted — awaiting Stephan’s approval before it’s sent to the client';
+    } else {
+      const stephan = await prisma.user.findFirst({ where: { name: 'Stephan' } });
+      if (stephan) assignedToId = stephan.id;
+      quoteStatus = 'NEEDS_MANUAL_QUOTE';
+      quoteNote = 'Flagged for Stephan — needs a quote drawn up';
+    }
   }
 
   const ticketNumber = await nextTicketNumber();
@@ -225,7 +279,36 @@ router.post('/', requireAuth, async (req, res) => {
     include: actionInclude
   });
 
-  res.status(201).json({ action });
+  let responseAction = action;
+  if (responseAction.sendAcknowledgement && responseAction.email) {
+    try {
+      await sendAcknowledgementEmail({
+        ticketNumber: responseAction.ticketNumber,
+        contactName: responseAction.contactPerson,
+        contactEmail: responseAction.email,
+        description: responseAction.description,
+        expectedByFormatted: responseAction.dueAt.toLocaleString('en-ZA', {
+          day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        })
+      });
+      console.log(`[acknowledgement-email] Sent for ${responseAction.ticketNumber}`);
+      responseAction = await prisma.action.update({
+        where: { id: responseAction.id },
+        data: { acknowledgementEmailSentAt: new Date(), acknowledgementEmailError: null },
+        include: actionInclude
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send acknowledgement email';
+      console.error(`[acknowledgement-email] Failed for ${responseAction.ticketNumber}:`, err);
+      responseAction = await prisma.action.update({
+        where: { id: responseAction.id },
+        data: { acknowledgementEmailError: message },
+        include: actionInclude
+      });
+    }
+  }
+
+  res.status(201).json({ action: responseAction });
 });
 
 const updateSchema = z.object({
@@ -336,7 +419,6 @@ router.post('/:id/status', requireAuth, async (req, res) => {
     try {
       await sendCompletionEmail({
         ticketNumber: action.ticketNumber,
-        clientName: action.client.name,
         contactName: action.contactPerson,
         contactEmail: action.email,
         description: action.description
@@ -429,12 +511,14 @@ router.post('/:id/quote-status', requireAuth, async (req, res) => {
 
   const { quoteStatus, quoteAmount, dueDate } = parsed.data;
   const isResponse = quoteStatus === 'ACCEPTED' || quoteStatus === 'DECLINED';
+  const sendingToClient = quoteStatus === 'PENDING_APPROVAL';
 
-  const action = await prisma.action.update({
+  let action = await prisma.action.update({
     where: { id },
     data: {
       quoteStatus,
       quoteAmount: quoteAmount === undefined ? undefined : quoteAmount,
+      quoteToken: sendingToClient && !existing.quoteToken ? generateQuoteToken() : undefined,
       quoteRespondedAt: isResponse ? new Date() : existing.quoteRespondedAt,
       dueAt: dueDate ? new Date(dueDate) : undefined,
       turnaround: dueDate ? 'CUSTOM_DATE' : undefined,
@@ -451,6 +535,10 @@ router.post('/:id/quote-status', requireAuth, async (req, res) => {
     },
     include: actionInclude
   });
+
+  if (sendingToClient) {
+    action = await attemptSendQuoteEmail(action, req);
+  }
 
   res.json({ action });
 });
@@ -477,7 +565,7 @@ router.post('/:id/approve-quote', requireAuth, async (req, res) => {
     return;
   }
 
-  const action = await prisma.action.update({
+  let action = await prisma.action.update({
     where: { id },
     data: {
       quoteStatus: 'PENDING_APPROVAL',
@@ -494,6 +582,8 @@ router.post('/:id/approve-quote', requireAuth, async (req, res) => {
     },
     include: actionInclude
   });
+
+  action = await attemptSendQuoteEmail(action, req);
 
   res.json({ action });
 });
