@@ -98,6 +98,7 @@ export interface Action {
   quoteRespondedAt: string | null;
   quoteEmailSentAt: string | null;
   quoteEmailError: string | null;
+  quoteBilled: boolean;
   addedToTimesheet: boolean;
   completionEmailSentAt: string | null;
   completionEmailError: string | null;

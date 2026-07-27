@@ -181,6 +181,7 @@ model Action {
   quoteRespondedAt        DateTime?
   quoteEmailSentAt        DateTime?
   quoteEmailError         String?
+  quoteBilled             Boolean    @default(false)
 
   addedToTimesheet       Boolean    @default(false)
 

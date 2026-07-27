@@ -319,7 +319,8 @@ const updateSchema = z.object({
   description: z.string().min(1).optional(),
   priority: z.enum(['CRITICAL', 'HIGH', 'NORMAL', 'LOW']).optional(),
   assignedToId: z.number().nullable().optional(),
-  addedToTimesheet: z.boolean().optional()
+  addedToTimesheet: z.boolean().optional(),
+  quoteBilled: z.boolean().optional()
 });
 
 router.patch('/:id', requireAuth, async (req, res) => {

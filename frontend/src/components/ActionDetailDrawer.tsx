@@ -79,6 +79,10 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
     run(() => api.patch(`/actions/${action.id}`, { addedToTimesheet: checked }));
   }
 
+  function toggleQuoteBilled(checked: boolean) {
+    run(() => api.patch(`/actions/${action.id}`, { quoteBilled: checked }));
+  }
+
   function setQuoteStatus(quoteStatus: QuoteStatus, quoteAmount?: number | null, dueDate?: string | null) {
     run(() => api.post(`/actions/${action.id}/quote-status`, { quoteStatus, quoteAmount, dueDate }));
   }
@@ -237,6 +241,18 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
                     </button>
                   </div>
                 </div>
+              )}
+
+              {action.quoteStatus === 'ACCEPTED' && (
+                <label className="checkbox-field" style={{ marginTop: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={action.quoteBilled}
+                    onChange={(e) => toggleQuoteBilled(e.target.checked)}
+                    disabled={busy}
+                  />
+                  Quote billed
+                </label>
               )}
             </div>
           </>
