@@ -332,6 +332,7 @@ router.post('/:id/status', requireAuth, async (req, res) => {
   // A mail hiccup shouldn't undo the status change, so failures are recorded
   // on the action instead of failing this request.
   if (status === 'COMPLETED' && action.email) {
+    console.log(`[completion-email] Sending for ${action.ticketNumber} to ${action.email}...`);
     try {
       await sendCompletionEmail({
         ticketNumber: action.ticketNumber,
@@ -340,18 +341,23 @@ router.post('/:id/status', requireAuth, async (req, res) => {
         contactEmail: action.email,
         description: action.description
       });
+      console.log(`[completion-email] Sent for ${action.ticketNumber}`);
       action = await prisma.action.update({
         where: { id },
         data: { completionEmailSentAt: new Date(), completionEmailError: null },
         include: actionInclude
       });
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send completion email';
+      console.error(`[completion-email] Failed for ${action.ticketNumber}:`, err);
       action = await prisma.action.update({
         where: { id },
-        data: { completionEmailError: err instanceof Error ? err.message : 'Failed to send completion email' },
+        data: { completionEmailError: message },
         include: actionInclude
       });
     }
+  } else if (status === 'COMPLETED') {
+    console.log(`[completion-email] Skipped for ${action.ticketNumber} — no contact email on file.`);
   }
 
   res.json({ action });
