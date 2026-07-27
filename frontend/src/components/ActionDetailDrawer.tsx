@@ -35,6 +35,7 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
   const [snoozeUntil, setSnoozeUntil] = useState('');
   const [snoozeReason, setSnoozeReason] = useState('Waiting for documents');
   const [quoteAmountInput, setQuoteAmountInput] = useState(action.quoteAmount ?? '');
+  const [quoteDueDateInput, setQuoteDueDateInput] = useState('');
 
   const timesheetRequired = !!action.assignedTo?.requiresTimesheetCheck;
 
@@ -78,13 +79,24 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
     run(() => api.patch(`/actions/${action.id}`, { addedToTimesheet: checked }));
   }
 
-  function setQuoteStatus(quoteStatus: QuoteStatus, quoteAmount?: number | null) {
-    run(() => api.post(`/actions/${action.id}/quote-status`, { quoteStatus, quoteAmount }));
+  function setQuoteStatus(quoteStatus: QuoteStatus, quoteAmount?: number | null, dueDate?: string | null) {
+    run(() => api.post(`/actions/${action.id}/quote-status`, { quoteStatus, quoteAmount, dueDate }));
   }
 
   function sendManualQuote() {
     const amount = quoteAmountInput === '' ? null : Number(quoteAmountInput);
-    setQuoteStatus('PENDING_APPROVAL', amount);
+    const dueDate = quoteDueDateInput ? new Date(quoteDueDateInput).toISOString() : null;
+    setQuoteStatus('PENDING_APPROVAL', amount, dueDate);
+  }
+
+  function approveQuote() {
+    const amount = quoteAmountInput === '' ? null : Number(quoteAmountInput);
+    run(() => api.post(`/actions/${action.id}/approve-quote`, { quoteAmount: amount }));
+  }
+
+  function sendBackForManualQuote() {
+    if (!confirm('Send this back to Stephan for a manual quote instead of the price-list amount?')) return;
+    setQuoteStatus('NEEDS_MANUAL_QUOTE');
   }
 
   const quoteLink = action.quoteToken ? `${window.location.origin}/quote/${action.quoteToken}` : null;
@@ -148,9 +160,41 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
                       placeholder="R"
                     />
                   </div>
+                  <div className="field">
+                    <label>Estimated timeline / due date (optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={quoteDueDateInput}
+                      onChange={(e) => setQuoteDueDateInput(e.target.value)}
+                    />
+                  </div>
                   <button className="btn btn-primary btn-sm" onClick={sendManualQuote} disabled={busy}>
                     Mark Quote Sent
                   </button>
+                </div>
+              )}
+
+              {action.quoteStatus === 'NEEDS_INTERNAL_APPROVAL' && (
+                <div style={{ marginTop: 10 }}>
+                  <div className="field">
+                    <label>Quote amount</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={quoteAmountInput}
+                      onChange={(e) => setQuoteAmountInput(e.target.value)}
+                      placeholder="R"
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary btn-sm" onClick={approveQuote} disabled={busy}>
+                      Approve &amp; Send to Client
+                    </button>
+                    <button className="btn btn-ghost btn-sm" onClick={sendBackForManualQuote} disabled={busy}>
+                      Quote Manually Instead
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -201,6 +245,21 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
           ))}
         </select>
+
+        {action.status === 'COMPLETED' && action.email && (
+          <div style={{ fontSize: 12, marginTop: 6 }}>
+            {action.completionEmailSentAt && (
+              <span style={{ color: 'var(--green-dark)' }}>
+                ✓ Completion email sent {formatDateTime(action.completionEmailSentAt)}
+              </span>
+            )}
+            {action.completionEmailError && (
+              <span style={{ color: 'var(--red)' }}>
+                ⚠ Completion email failed — {action.completionEmailError}. Follow up with the client directly.
+              </span>
+            )}
+          </div>
+        )}
 
         {showSnooze && (
           <div style={{ marginTop: 10 }}>

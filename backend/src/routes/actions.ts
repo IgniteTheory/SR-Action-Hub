@@ -6,6 +6,7 @@ import { requireAdmin, requireAuth } from '../middleware/auth';
 import { nextTicketNumber } from '../lib/ticketNumber';
 import { calculateDueDate } from '../lib/dueDate';
 import { generateQuoteToken } from '../lib/quoteToken';
+import { sendCompletionEmail } from '../lib/email';
 
 const router = Router();
 
@@ -79,6 +80,9 @@ router.get('/', requireAuth, async (req, res) => {
     case 'quote-needed':
       where.quoteStatus = 'NEEDS_MANUAL_QUOTE';
       break;
+    case 'needs-internal-approval':
+      where.quoteStatus = 'NEEDS_INTERNAL_APPROVAL';
+      break;
     case 'approval-pending':
       where.quoteStatus = 'PENDING_APPROVAL';
       break;
@@ -123,8 +127,9 @@ const createSchema = z.object({
   description: z.string().min(1),
   assignedToId: z.number().nullable().optional(),
   priority: z.enum(['CRITICAL', 'HIGH', 'NORMAL', 'LOW']),
-  turnaround: z.enum(['URGENT', 'HOURS_2_3', 'TODAY', 'DAY_1', 'DAYS_2_3', 'WEEK_1', 'CUSTOM']),
+  turnaround: z.enum(['URGENT', 'HOURS_2_3', 'TODAY', 'DAY_1', 'DAYS_2_3', 'WEEK_1', 'CUSTOM', 'CUSTOM_DATE']),
   customTurnaroundHours: z.number().optional(),
+  customDueDate: z.string().optional(),
   sendAcknowledgement: z.boolean().optional()
 });
 
@@ -155,12 +160,13 @@ router.post('/', requireAuth, async (req, res) => {
 
   // Quote behaviour drives allocation: MANUAL (new/unpriced work, always true for
   // "Other") force-allocates to Stephan and flags it for him to quote; AUTO (a
-  // priced request type) drafts a client-facing quote up front and parks it under
-  // Approval Pending; NEVER leaves the action to be allocated/worked as normal.
+  // priced request type) drafts a quote from the price list, but it sits with
+  // Stephan for internal approval first — the client-facing link only gets
+  // created once he approves (see POST /:id/approve-quote); NEVER leaves the
+  // action to be allocated/worked as normal.
   let assignedToId = data.assignedToId ?? null;
-  let quoteStatus: 'NOT_NEEDED' | 'NEEDS_MANUAL_QUOTE' | 'PENDING_APPROVAL' = 'NOT_NEEDED';
+  let quoteStatus: 'NOT_NEEDED' | 'NEEDS_MANUAL_QUOTE' | 'NEEDS_INTERNAL_APPROVAL' = 'NOT_NEEDED';
   let quoteAmount: Prisma.Decimal | null = null;
-  let quoteToken: string | null = null;
   let quoteNote: string | null = null;
 
   if (requestType.quoteBehavior === 'MANUAL') {
@@ -169,14 +175,18 @@ router.post('/', requireAuth, async (req, res) => {
     quoteStatus = 'NEEDS_MANUAL_QUOTE';
     quoteNote = 'Flagged for Stephan — new/unpriced request, needs a quote drawn up';
   } else if (requestType.quoteBehavior === 'AUTO') {
-    quoteToken = generateQuoteToken();
     quoteAmount = requestType.price;
-    quoteStatus = 'PENDING_APPROVAL';
-    quoteNote = 'Quote drafted and awaiting client approval';
+    quoteStatus = 'NEEDS_INTERNAL_APPROVAL';
+    quoteNote = 'Quote drafted from the price list — awaiting Stephan’s approval before it’s sent to the client';
   }
 
   const ticketNumber = await nextTicketNumber();
-  const dueAt = calculateDueDate(data.turnaround, data.customTurnaroundHours ?? null);
+  const dueAt = calculateDueDate(
+    data.turnaround,
+    data.customTurnaroundHours ?? null,
+    new Date(),
+    data.customDueDate ? new Date(data.customDueDate) : null
+  );
   const status: 'ALLOCATED' | 'NEW' = assignedToId ? 'ALLOCATED' : 'NEW';
 
   const historyEntries: Prisma.StatusHistoryUncheckedCreateWithoutActionInput[] = [
@@ -207,7 +217,6 @@ router.post('/', requireAuth, async (req, res) => {
       sendAcknowledgement: data.sendAcknowledgement ?? false,
       quoteStatus,
       quoteAmount,
-      quoteToken,
       createdById: req.user!.id,
       statusHistory: {
         create: historyEntries
@@ -305,7 +314,7 @@ router.post('/:id/status', requireAuth, async (req, res) => {
     }
   }
 
-  const action = await prisma.action.update({
+  let action = await prisma.action.update({
     where: { id },
     data: {
       status,
@@ -318,6 +327,32 @@ router.post('/:id/status', requireAuth, async (req, res) => {
     },
     include: actionInclude
   });
+
+  // Let the client know as soon as their request is completed/handed over.
+  // A mail hiccup shouldn't undo the status change, so failures are recorded
+  // on the action instead of failing this request.
+  if (status === 'COMPLETED' && action.email) {
+    try {
+      await sendCompletionEmail({
+        ticketNumber: action.ticketNumber,
+        clientName: action.client.name,
+        contactName: action.contactPerson,
+        contactEmail: action.email,
+        description: action.description
+      });
+      action = await prisma.action.update({
+        where: { id },
+        data: { completionEmailSentAt: new Date(), completionEmailError: null },
+        include: actionInclude
+      });
+    } catch (err) {
+      action = await prisma.action.update({
+        where: { id },
+        data: { completionEmailError: err instanceof Error ? err.message : 'Failed to send completion email' },
+        include: actionInclude
+      });
+    }
+  }
 
   res.json({ action });
 });
@@ -362,8 +397,11 @@ router.post('/:id/snooze', requireAuth, async (req, res) => {
 });
 
 const quoteStatusSchema = z.object({
-  quoteStatus: z.enum(['NOT_NEEDED', 'NEEDS_MANUAL_QUOTE', 'PENDING_APPROVAL', 'ACCEPTED', 'DECLINED']),
-  quoteAmount: z.number().nullable().optional()
+  quoteStatus: z.enum(['NOT_NEEDED', 'NEEDS_MANUAL_QUOTE', 'NEEDS_INTERNAL_APPROVAL', 'PENDING_APPROVAL', 'ACCEPTED', 'DECLINED']),
+  quoteAmount: z.number().nullable().optional(),
+  // Lets Stephan give the client an estimated timeline as part of a manual
+  // quote — reuses the action's own due date rather than a parallel field.
+  dueDate: z.string().nullable().optional()
 });
 
 // Lets Stephan (or an admin) move a manually-quoted action through its
@@ -383,7 +421,7 @@ router.post('/:id/quote-status', requireAuth, async (req, res) => {
     return;
   }
 
-  const { quoteStatus, quoteAmount } = parsed.data;
+  const { quoteStatus, quoteAmount, dueDate } = parsed.data;
   const isResponse = quoteStatus === 'ACCEPTED' || quoteStatus === 'DECLINED';
 
   const action = await prisma.action.update({
@@ -392,12 +430,59 @@ router.post('/:id/quote-status', requireAuth, async (req, res) => {
       quoteStatus,
       quoteAmount: quoteAmount === undefined ? undefined : quoteAmount,
       quoteRespondedAt: isResponse ? new Date() : existing.quoteRespondedAt,
+      dueAt: dueDate ? new Date(dueDate) : undefined,
+      turnaround: dueDate ? 'CUSTOM_DATE' : undefined,
       statusHistory: {
         create: [{
           fromStatus: existing.status,
           toStatus: existing.status,
           changedById: req.user!.id,
-          note: `Quote status updated to ${quoteStatus}`
+          note: dueDate
+            ? `Quote status updated to ${quoteStatus} — estimated due ${new Date(dueDate).toLocaleDateString()}`
+            : `Quote status updated to ${quoteStatus}`
+        }]
+      }
+    },
+    include: actionInclude
+  });
+
+  res.json({ action });
+});
+
+const approveQuoteSchema = z.object({ quoteAmount: z.number().nullable().optional() });
+
+// The one place a client-facing quote token gets created: Stephan approving
+// an AUTO-drafted quote. Nothing else on an AUTO quote is client-visible
+// until this fires, so the public link genuinely doesn't exist until then.
+router.post('/:id/approve-quote', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const parsed = approveQuoteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+  const existing = await prisma.action.findFirst({ where: { id, deletedAt: null } });
+  if (!existing) {
+    res.status(404).json({ error: 'Action not found' });
+    return;
+  }
+  if (existing.quoteStatus !== 'NEEDS_INTERNAL_APPROVAL') {
+    res.status(400).json({ error: 'This quote is not awaiting approval.' });
+    return;
+  }
+
+  const action = await prisma.action.update({
+    where: { id },
+    data: {
+      quoteStatus: 'PENDING_APPROVAL',
+      quoteToken: generateQuoteToken(),
+      quoteAmount: parsed.data.quoteAmount === undefined ? undefined : parsed.data.quoteAmount,
+      statusHistory: {
+        create: [{
+          fromStatus: existing.status,
+          toStatus: existing.status,
+          changedById: req.user!.id,
+          note: 'Quote approved by Stephan and sent to the client'
         }]
       }
     },

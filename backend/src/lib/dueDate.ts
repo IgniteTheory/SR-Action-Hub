@@ -2,9 +2,16 @@ import { Turnaround } from '@prisma/client';
 
 // Simple calendar-time offsets from creation. Does not account for business
 // hours/weekends/holidays yet — a reasonable Phase 1 simplification.
-export function calculateDueDate(turnaround: Turnaround, customHours: number | null, from: Date = new Date()): Date {
+export function calculateDueDate(
+  turnaround: Turnaround,
+  customHours: number | null,
+  from: Date = new Date(),
+  customDate: Date | null = null
+): Date {
   const due = new Date(from);
   switch (turnaround) {
+    case 'CUSTOM_DATE':
+      return customDate ?? due;
     case 'URGENT':
       due.setHours(due.getHours() + 1);
       return due;

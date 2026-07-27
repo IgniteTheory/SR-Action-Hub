@@ -4,7 +4,7 @@ export type CommunicationSource = 'PHONE' | 'EMAIL' | 'WHATSAPP' | 'WALK_IN' | '
 
 export type Priority = 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW';
 
-export type Turnaround = 'URGENT' | 'HOURS_2_3' | 'TODAY' | 'DAY_1' | 'DAYS_2_3' | 'WEEK_1' | 'CUSTOM';
+export type Turnaround = 'URGENT' | 'HOURS_2_3' | 'TODAY' | 'DAY_1' | 'DAYS_2_3' | 'WEEK_1' | 'CUSTOM' | 'CUSTOM_DATE';
 
 export type ActionStatus =
   | 'NEW'
@@ -20,7 +20,7 @@ export type ActionStatus =
 
 export type QuoteBehavior = 'NEVER' | 'MANUAL' | 'AUTO';
 
-export type QuoteStatus = 'NOT_NEEDED' | 'NEEDS_MANUAL_QUOTE' | 'PENDING_APPROVAL' | 'ACCEPTED' | 'DECLINED';
+export type QuoteStatus = 'NOT_NEEDED' | 'NEEDS_MANUAL_QUOTE' | 'NEEDS_INTERNAL_APPROVAL' | 'PENDING_APPROVAL' | 'ACCEPTED' | 'DECLINED';
 
 export interface UserSummary {
   id: number;
@@ -95,6 +95,8 @@ export interface Action {
   quoteToken: string | null;
   quoteRespondedAt: string | null;
   addedToTimesheet: boolean;
+  completionEmailSentAt: string | null;
+  completionEmailError: string | null;
   createdById: number;
   createdBy: UserSummary;
   createdAt: string;

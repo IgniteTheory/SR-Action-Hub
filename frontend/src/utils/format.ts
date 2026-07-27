@@ -49,12 +49,14 @@ export const TURNAROUND_LABELS: Record<Turnaround, string> = {
   DAY_1: '1 Day',
   DAYS_2_3: '2–3 Days',
   WEEK_1: '1 Week',
-  CUSTOM: 'Custom',
+  CUSTOM: 'Custom (hours from now)',
+  CUSTOM_DATE: 'Custom Date',
 };
 
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   NOT_NEEDED: 'No Quote Needed',
   NEEDS_MANUAL_QUOTE: 'Quote Needed',
+  NEEDS_INTERNAL_APPROVAL: 'Awaiting Stephan’s Approval',
   PENDING_APPROVAL: 'Approval Pending',
   ACCEPTED: 'Quote Accepted',
   DECLINED: 'Quote Declined',

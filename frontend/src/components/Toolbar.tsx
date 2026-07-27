@@ -15,6 +15,7 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'unallocated', label: 'Unallocated' },
   { key: 'completed', label: 'Completed' },
   { key: 'quote-needed', label: 'Quote Needed' },
+  { key: 'needs-internal-approval', label: 'Needs Approval' },
   { key: 'approval-pending', label: 'Approval Pending' },
 ];
 

@@ -30,7 +30,7 @@ router.get('/kpis', requireAuth, async (req, res) => {
       where: { ...baseWhere, status: 'NEW' }
     }),
     prisma.action.count({
-      where: { ...baseWhere, quoteStatus: { in: ['NEEDS_MANUAL_QUOTE', 'PENDING_APPROVAL'] } }
+      where: { ...baseWhere, quoteStatus: { in: ['NEEDS_MANUAL_QUOTE', 'NEEDS_INTERNAL_APPROVAL', 'PENDING_APPROVAL'] } }
     }),
     prisma.action.findMany({
       where: { ...baseWhere, status: 'COMPLETED', completedAt: { not: null } },

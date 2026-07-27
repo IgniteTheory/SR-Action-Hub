@@ -161,6 +161,7 @@ button, input, select, textarea { font-family: var(--sans); }
   margin-left: 6px;
 }
 .quote-badge.NEEDS_MANUAL_QUOTE { background: var(--red-bg); color: var(--red); }
+.quote-badge.NEEDS_INTERNAL_APPROVAL { background: var(--amber-bg); color: var(--amber); }
 .quote-badge.PENDING_APPROVAL { background: #f1eafe; color: #7c3aed; }
 .quote-badge.ACCEPTED { background: var(--green-light); color: var(--green-dark); }
 .quote-badge.DECLINED { background: #f3f3f3; color: var(--text-muted); }

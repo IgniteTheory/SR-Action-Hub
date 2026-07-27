@@ -33,6 +33,7 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
   const [priority, setPriority] = useState('NORMAL');
   const [turnaround, setTurnaround] = useState('TODAY');
   const [customHours, setCustomHours] = useState(24);
+  const [customDueDate, setCustomDueDate] = useState('');
   const [sendAcknowledgement, setSendAcknowledgement] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +71,10 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
       setError('Description is required.');
       return;
     }
+    if (turnaround === 'CUSTOM_DATE' && !customDueDate) {
+      setError('Choose a due date.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -94,6 +99,7 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
         priority,
         turnaround,
         customTurnaroundHours: turnaround === 'CUSTOM' ? customHours : undefined,
+        customDueDate: turnaround === 'CUSTOM_DATE' ? new Date(customDueDate).toISOString() : undefined,
         sendAcknowledgement,
       });
       onCreated();
@@ -226,6 +232,12 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
           <div className="field">
             <label>Custom Turnaround (hours)</label>
             <input type="number" min={1} value={customHours} onChange={(e) => setCustomHours(Number(e.target.value))} />
+          </div>
+        )}
+        {turnaround === 'CUSTOM_DATE' && (
+          <div className="field">
+            <label>Due Date</label>
+            <input type="datetime-local" value={customDueDate} onChange={(e) => setCustomDueDate(e.target.value)} />
           </div>
         )}
 

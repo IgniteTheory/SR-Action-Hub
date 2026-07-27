@@ -42,6 +42,7 @@ enum Turnaround {
   DAYS_2_3
   WEEK_1
   CUSTOM
+  CUSTOM_DATE
 }
 
 enum ActionStatus {
@@ -67,6 +68,7 @@ enum QuoteBehavior {
 enum QuoteStatus {
   NOT_NEEDED
   NEEDS_MANUAL_QUOTE
+  NEEDS_INTERNAL_APPROVAL // AUTO-priced quote drafted, waiting on Stephan to approve before the client sees it
   PENDING_APPROVAL
   ACCEPTED
   DECLINED
@@ -177,6 +179,9 @@ model Action {
   quoteRespondedAt        DateTime?
 
   addedToTimesheet       Boolean    @default(false)
+
+  completionEmailSentAt  DateTime?
+  completionEmailError   String?
 
   createdById            Int
   createdAt              DateTime   @default(now())
