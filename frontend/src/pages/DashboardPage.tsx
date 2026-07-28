@@ -6,6 +6,7 @@ import StaffTabs from '../components/StaffTabs';
 import Toolbar from '../components/Toolbar';
 import ActionList from '../components/ActionList';
 import CompletedRail from '../components/CompletedRail';
+import WorkingOnPanel from '../components/WorkingOnPanel';
 import CreateActionDrawer from '../components/CreateActionDrawer';
 import ActionDetailDrawer from '../components/ActionDetailDrawer';
 
@@ -15,6 +16,7 @@ export default function DashboardPage() {
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
   const [actions, setActions] = useState<Action[]>([]);
   const [completedActions, setCompletedActions] = useState<Action[]>([]);
+  const [workingOnActions, setWorkingOnActions] = useState<Action[]>([]);
   const [staffFilter, setStaffFilter] = useState<number | 'all'>('all');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string | null>(null);
@@ -52,6 +54,16 @@ export default function DashboardPage() {
     setCompletedActions(res.actions);
   }, [staffFilter]);
 
+  const loadWorkingOn = useCallback(async () => {
+    const params = new URLSearchParams({ status: 'IN_PROGRESS' });
+    if (staffFilter !== 'all') params.set('assignedToId', String(staffFilter));
+    const res = await api.get<{ actions: Action[] }>(`/actions?${params.toString()}`);
+    const sorted = [...res.actions].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    setWorkingOnActions(sorted);
+  }, [staffFilter]);
+
   useEffect(() => {
     loadStatic();
   }, [loadStatic]);
@@ -60,10 +72,11 @@ export default function DashboardPage() {
     loadKpis();
     loadActions();
     loadCompleted();
-  }, [loadKpis, loadActions, loadCompleted]);
+    loadWorkingOn();
+  }, [loadKpis, loadActions, loadCompleted, loadWorkingOn]);
 
   async function refreshAll() {
-    await Promise.all([loadKpis(), loadActions(), loadCompleted()]);
+    await Promise.all([loadKpis(), loadActions(), loadCompleted(), loadWorkingOn()]);
   }
 
   async function openAction(action: Action) {
@@ -81,14 +94,17 @@ export default function DashboardPage() {
       <KpiCards kpis={kpis} />
 
       <div className="dashboard-layout">
-        <CompletedRail actions={completedActions} onSelect={openAction} />
-
         <div className="dashboard-main">
           <StaffTabs users={users} activeId={staffFilter} onChange={setStaffFilter} />
 
           <Toolbar search={search} onSearchChange={setSearch} filter={filter} onFilterChange={setFilter} />
 
           <ActionList actions={actions} onSelect={openAction} />
+        </div>
+
+        <div className="side-rail">
+          <WorkingOnPanel actions={workingOnActions} onSelect={openAction} />
+          <CompletedRail actions={completedActions} onSelect={openAction} />
         </div>
       </div>
 

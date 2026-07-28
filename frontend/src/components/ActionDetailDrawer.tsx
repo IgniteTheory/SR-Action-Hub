@@ -37,6 +37,14 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
   const [quoteAmountInput, setQuoteAmountInput] = useState(action.quoteAmount ?? '');
   const [quoteDueDateInput, setQuoteDueDateInput] = useState('');
   const [subtaskInput, setSubtaskInput] = useState('');
+  const [showAddQuote, setShowAddQuote] = useState(false);
+  const [addQuoteFeeInput, setAddQuoteFeeInput] = useState('');
+  const [showEdit, setShowEdit] = useState(false);
+  const [editContactPerson, setEditContactPerson] = useState(action.contactPerson);
+  const [editTelephone, setEditTelephone] = useState(action.telephone ?? '');
+  const [editEmail, setEditEmail] = useState(action.email ?? '');
+  const [editDescription, setEditDescription] = useState(action.description);
+  const [editPriority, setEditPriority] = useState(action.priority);
 
   const timesheetRequired = !!action.assignedTo?.requiresTimesheetCheck;
 
@@ -124,6 +132,34 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
     if (quoteLink) navigator.clipboard.writeText(quoteLink);
   }
 
+  function submitAddQuote() {
+    const feeInput = addQuoteFeeInput === '' ? null : Number(addQuoteFeeInput);
+    run(() => api.post(`/actions/${action.id}/request-quote`, { feeInput })).then(() => {
+      setShowAddQuote(false);
+      setAddQuoteFeeInput('');
+    });
+  }
+
+  function submitEdit() {
+    if (!editContactPerson.trim()) {
+      setError('Contact Person is required.');
+      return;
+    }
+    if (!editDescription.trim()) {
+      setError('Description is required.');
+      return;
+    }
+    run(() =>
+      api.patch(`/actions/${action.id}`, {
+        contactPerson: editContactPerson.trim(),
+        telephone: editTelephone.trim() || undefined,
+        email: editEmail.trim() || undefined,
+        description: editDescription.trim(),
+        priority: editPriority,
+      })
+    ).then(() => setShowEdit(false));
+  }
+
   return (
     <div className="drawer-overlay" onClick={onClose}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
@@ -132,7 +168,12 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
             <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 700 }}>{action.ticketNumber}</div>
             <h2 style={{ margin: '2px 0 0' }}>{action.client.name}</h2>
           </div>
-          <span className={`status-pill ${action.status}`}>{STATUS_LABELS[action.status]}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowEdit((v) => !v)} disabled={busy}>
+              {showEdit ? 'Cancel Edit' : 'Edit'}
+            </button>
+            <span className={`status-pill ${action.status}`}>{STATUS_LABELS[action.status]}</span>
+          </div>
         </div>
 
         {action.status === 'SNOOZED' && action.snoozeUntil && (
@@ -141,33 +182,67 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
           </div>
         )}
 
-        <div className="detail-row"><span>Contact</span><b>{action.contactPerson}</b></div>
-        {action.telephone && <div className="detail-row"><span>Telephone</span><b>{action.telephone}</b></div>}
-        {action.email && <div className="detail-row"><span>Email</span><b>{action.email}</b></div>}
-        <div className="detail-row"><span>Source</span><b>{COMM_SOURCE_LABELS[action.communicationSource]}</b></div>
-        <div className="detail-row"><span>Request Type</span><b>{action.requestType.name}</b></div>
-        <div className="detail-row"><span>Priority</span><b>{PRIORITY_LABELS[action.priority]}</b></div>
-        <div className="detail-row"><span>Turnaround</span><b>{TURNAROUND_LABELS[action.turnaround]}</b></div>
-        <div className="detail-row"><span>Due</span><b>{formatDateTime(action.dueAt)}</b></div>
-        <div className="detail-row"><span>Created by</span><b>{action.createdBy.name}</b></div>
+        {!showEdit ? (
+          <>
+            <div className="detail-row"><span>Contact</span><b>{action.contactPerson}</b></div>
+            {action.telephone && <div className="detail-row"><span>Telephone</span><b>{action.telephone}</b></div>}
+            {action.email && <div className="detail-row"><span>Email</span><b>{action.email}</b></div>}
+            <div className="detail-row"><span>Source</span><b>{COMM_SOURCE_LABELS[action.communicationSource]}</b></div>
+            <div className="detail-row"><span>Request Type</span><b>{action.requestType.name}</b></div>
+            <div className="detail-row"><span>Priority</span><b>{PRIORITY_LABELS[action.priority]}</b></div>
+            <div className="detail-row"><span>Turnaround</span><b>{TURNAROUND_LABELS[action.turnaround]}</b></div>
+            <div className="detail-row"><span>Due</span><b>{formatDateTime(action.dueAt)}</b></div>
+            <div className="detail-row"><span>Created by</span><b>{action.createdBy.name}</b></div>
 
-        {action.sendAcknowledgement && (
-          <div style={{ fontSize: 12, margin: '6px 0' }}>
-            {action.acknowledgementEmailSentAt && (
-              <span style={{ color: 'var(--green-dark)' }}>
-                ✓ Acknowledgement sent {formatDateTime(action.acknowledgementEmailSentAt)}
-              </span>
+            {action.sendAcknowledgement && (
+              <div style={{ fontSize: 12, margin: '6px 0' }}>
+                {action.acknowledgementEmailSentAt && (
+                  <span style={{ color: 'var(--green-dark)' }}>
+                    ✓ Acknowledgement sent {formatDateTime(action.acknowledgementEmailSentAt)}
+                  </span>
+                )}
+                {action.acknowledgementEmailError && (
+                  <span style={{ color: 'var(--red)' }}>
+                    ⚠ Acknowledgement email failed — {action.acknowledgementEmailError}
+                  </span>
+                )}
+              </div>
             )}
-            {action.acknowledgementEmailError && (
-              <span style={{ color: 'var(--red)' }}>
-                ⚠ Acknowledgement email failed — {action.acknowledgementEmailError}
-              </span>
-            )}
+
+            <h3>Description</h3>
+            <p style={{ fontSize: 13.5, margin: '0 0 14px' }}>{action.description}</p>
+          </>
+        ) : (
+          <div style={{ marginTop: 10 }}>
+            <div className="field">
+              <label>Contact Person</label>
+              <input value={editContactPerson} onChange={(e) => setEditContactPerson(e.target.value)} />
+            </div>
+            <div className="field-row">
+              <div className="field">
+                <label>Telephone</label>
+                <input value={editTelephone} onChange={(e) => setEditTelephone(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Email</label>
+                <input value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+              </div>
+            </div>
+            <div className="field">
+              <label>Description</label>
+              <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Priority</label>
+              <select value={editPriority} onChange={(e) => setEditPriority(e.target.value as Action['priority'])}>
+                {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={submitEdit} disabled={busy}>Save Changes</button>
           </div>
         )}
-
-        <h3>Description</h3>
-        <p style={{ fontSize: 13.5, margin: '0 0 14px' }}>{action.description}</p>
 
         <h3>Sub-tasks</h3>
         {action.subtasks.length ? (
@@ -299,6 +374,65 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
                   />
                   Quote billed
                 </label>
+              )}
+
+              {(action.quoteStatus === 'ACCEPTED' || action.quoteStatus === 'DECLINED') && (
+                <div style={{ marginTop: 10 }}>
+                  {!showAddQuote ? (
+                    <button className="btn btn-ghost btn-sm" onClick={() => setShowAddQuote(true)} disabled={busy}>
+                      + Request Another Quote
+                    </button>
+                  ) : (
+                    <>
+                      <div className="field">
+                        <label>Fee for the extra work (leave blank for Stephan to quote personally)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={addQuoteFeeInput}
+                          onChange={(e) => setAddQuoteFeeInput(e.target.value)}
+                          placeholder="R"
+                        />
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-primary btn-sm" onClick={submitAddQuote} disabled={busy}>Request Quote</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setShowAddQuote(false)} disabled={busy}>Cancel</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {action.quoteStatus === 'NOT_NEEDED' && (
+          <>
+            <h3>Quote</h3>
+            <div className="quote-panel">
+              {!showAddQuote ? (
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowAddQuote(true)} disabled={busy}>
+                  + Add a Quote for Extra Work
+                </button>
+              ) : (
+                <>
+                  <div className="field">
+                    <label>Fee (leave blank for Stephan to quote personally)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={addQuoteFeeInput}
+                      onChange={(e) => setAddQuoteFeeInput(e.target.value)}
+                      placeholder="R"
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-primary btn-sm" onClick={submitAddQuote} disabled={busy}>Request Quote</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setShowAddQuote(false)} disabled={busy}>Cancel</button>
+                  </div>
+                </>
               )}
             </div>
           </>

@@ -612,6 +612,73 @@ router.post('/:id/approve-quote', requireAuth, async (req, res) => {
   res.json({ action });
 });
 
+const requestQuoteSchema = z.object({ feeInput: z.number().nullable().optional() });
+
+// Lets staff start a fresh quote round on a ticket that's already settled
+// (never needed one, or the last one was accepted/declined) — e.g. the
+// client asks for extra work partway through — without opening a new
+// ticket. Blocked while a quote is already in flight so it can't clobber
+// one that's mid-approval or waiting on the client.
+router.post('/:id/request-quote', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const parsed = requestQuoteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+  const existing = await prisma.action.findFirst({ where: { id, deletedAt: null } });
+  if (!existing) {
+    res.status(404).json({ error: 'Action not found' });
+    return;
+  }
+  if (!['NOT_NEEDED', 'ACCEPTED', 'DECLINED'].includes(existing.quoteStatus)) {
+    res.status(400).json({ error: 'A quote is already in progress for this ticket.' });
+    return;
+  }
+
+  const feeInput = parsed.data.feeInput ?? null;
+  let quoteStatus: 'NEEDS_MANUAL_QUOTE' | 'NEEDS_INTERNAL_APPROVAL';
+  let quoteAmount: Prisma.Decimal | null = null;
+  let assignedToId = existing.assignedToId;
+  let note: string;
+
+  if (feeInput != null) {
+    quoteAmount = new Prisma.Decimal(feeInput);
+    quoteStatus = 'NEEDS_INTERNAL_APPROVAL';
+    note = 'Additional quote drafted — awaiting Stephan’s approval before it’s sent to the client';
+  } else {
+    const stephan = await prisma.user.findFirst({ where: { name: 'Stephan' } });
+    if (stephan) assignedToId = stephan.id;
+    quoteStatus = 'NEEDS_MANUAL_QUOTE';
+    note = 'Additional quote flagged for Stephan — needs a quote drawn up';
+  }
+
+  const action = await prisma.action.update({
+    where: { id },
+    data: {
+      quoteStatus,
+      quoteAmount,
+      assignedToId,
+      quoteToken: null,
+      quoteRespondedAt: null,
+      quoteEmailSentAt: null,
+      quoteEmailError: null,
+      quoteBilled: false,
+      statusHistory: {
+        create: [{
+          fromStatus: existing.status,
+          toStatus: existing.status,
+          changedById: req.user!.id,
+          note
+        }]
+      }
+    },
+    include: actionInclude
+  });
+
+  res.json({ action });
+});
+
 /* ---------- sub-tasks ---------- */
 
 const subtaskSchema = z.object({ text: z.string().min(1) });
