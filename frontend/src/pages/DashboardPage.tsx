@@ -5,6 +5,7 @@ import KpiCards from '../components/KpiCards';
 import StaffTabs from '../components/StaffTabs';
 import Toolbar from '../components/Toolbar';
 import ActionList from '../components/ActionList';
+import CompletedRail from '../components/CompletedRail';
 import CreateActionDrawer from '../components/CreateActionDrawer';
 import ActionDetailDrawer from '../components/ActionDetailDrawer';
 
@@ -13,6 +14,7 @@ export default function DashboardPage() {
   const [requestTypes, setRequestTypes] = useState<RequestType[]>([]);
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
   const [actions, setActions] = useState<Action[]>([]);
+  const [completedActions, setCompletedActions] = useState<Action[]>([]);
   const [staffFilter, setStaffFilter] = useState<number | 'all'>('all');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string | null>(null);
@@ -43,6 +45,13 @@ export default function DashboardPage() {
     setActions(res.actions);
   }, [search, filter, staffFilter]);
 
+  const loadCompleted = useCallback(async () => {
+    const params = new URLSearchParams({ filter: 'completed' });
+    if (staffFilter !== 'all') params.set('assignedToId', String(staffFilter));
+    const res = await api.get<{ actions: Action[] }>(`/actions?${params.toString()}`);
+    setCompletedActions(res.actions);
+  }, [staffFilter]);
+
   useEffect(() => {
     loadStatic();
   }, [loadStatic]);
@@ -50,10 +59,11 @@ export default function DashboardPage() {
   useEffect(() => {
     loadKpis();
     loadActions();
-  }, [loadKpis, loadActions]);
+    loadCompleted();
+  }, [loadKpis, loadActions, loadCompleted]);
 
   async function refreshAll() {
-    await Promise.all([loadKpis(), loadActions()]);
+    await Promise.all([loadKpis(), loadActions(), loadCompleted()]);
   }
 
   async function openAction(action: Action) {
@@ -70,11 +80,17 @@ export default function DashboardPage() {
 
       <KpiCards kpis={kpis} />
 
-      <StaffTabs users={users} activeId={staffFilter} onChange={setStaffFilter} />
+      <div className="dashboard-layout">
+        <CompletedRail actions={completedActions} onSelect={openAction} />
 
-      <Toolbar search={search} onSearchChange={setSearch} filter={filter} onFilterChange={setFilter} />
+        <div className="dashboard-main">
+          <StaffTabs users={users} activeId={staffFilter} onChange={setStaffFilter} />
 
-      <ActionList actions={actions} onSelect={openAction} />
+          <Toolbar search={search} onSearchChange={setSearch} filter={filter} onFilterChange={setFilter} />
+
+          <ActionList actions={actions} onSelect={openAction} />
+        </div>
+      </div>
 
       {showCreate && (
         <CreateActionDrawer

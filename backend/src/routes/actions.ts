@@ -129,10 +129,17 @@ router.get('/', requireAuth, async (req, res) => {
       break;
   }
 
+  // Completed tickets move to the dedicated Completed list/tab — keep them
+  // out of every other view so the working list doesn't fill up with
+  // finished work, unless a view already targets a specific status itself.
+  if (filter !== 'completed' && where.status === undefined) {
+    where.status = { not: 'COMPLETED' };
+  }
+
   const actions = await prisma.action.findMany({
     where,
     include: actionInclude,
-    orderBy: [{ dueAt: 'asc' }],
+    orderBy: filter === 'completed' ? [{ completedAt: 'desc' }] : [{ dueAt: 'asc' }],
     take: 200
   });
 
