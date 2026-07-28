@@ -36,6 +36,7 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
   const [snoozeReason, setSnoozeReason] = useState('Waiting for documents');
   const [quoteAmountInput, setQuoteAmountInput] = useState(action.quoteAmount ?? '');
   const [quoteDueDateInput, setQuoteDueDateInput] = useState('');
+  const [subtaskInput, setSubtaskInput] = useState('');
 
   const timesheetRequired = !!action.assignedTo?.requiresTimesheetCheck;
 
@@ -81,6 +82,20 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
 
   function toggleQuoteBilled(checked: boolean) {
     run(() => api.patch(`/actions/${action.id}`, { quoteBilled: checked }));
+  }
+
+  function addSubtask() {
+    const text = subtaskInput.trim();
+    if (!text) return;
+    run(() => api.post(`/actions/${action.id}/subtasks`, { text })).then(() => setSubtaskInput(''));
+  }
+
+  function toggleSubtask(subId: number, done: boolean) {
+    run(() => api.patch(`/actions/${action.id}/subtasks/${subId}`, { done }));
+  }
+
+  function deleteSubtask(subId: number) {
+    run(() => api.delete(`/actions/${action.id}/subtasks/${subId}`));
   }
 
   function setQuoteStatus(quoteStatus: QuoteStatus, quoteAmount?: number | null, dueDate?: string | null) {
@@ -152,7 +167,32 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
         )}
 
         <h3>Description</h3>
-        <p style={{ fontSize: 13.5, margin: 0 }}>{action.description}</p>
+        <p style={{ fontSize: 13.5, margin: '0 0 14px' }}>{action.description}</p>
+
+        <h3>Sub-tasks</h3>
+        {action.subtasks.length ? (
+          action.subtasks.map((s) => (
+            <div key={s.id} className="subtask-row">
+              <input type="checkbox" checked={s.done} onChange={(e) => toggleSubtask(s.id, e.target.checked)} disabled={busy} />
+              <span className={`txt${s.done ? ' done' : ''}`}>{s.text}</span>
+              <button onClick={() => deleteSubtask(s.id)} title="Delete" disabled={busy}>×</button>
+            </div>
+          ))
+        ) : (
+          <div className="empty-note" style={{ marginBottom: 8 }}>No sub-tasks yet.</div>
+        )}
+        <div className="subtask-add">
+          <input
+            type="text"
+            placeholder="Add sub-task…"
+            value={subtaskInput}
+            onChange={(e) => setSubtaskInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addSubtask();
+            }}
+          />
+          <button className="btn btn-ghost btn-sm" onClick={addSubtask} disabled={busy || !subtaskInput.trim()}>Add</button>
+        </div>
 
         {action.quoteStatus !== 'NOT_NEEDED' && (
           <>
@@ -187,8 +227,14 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
                       onChange={(e) => setQuoteDueDateInput(e.target.value)}
                     />
                   </div>
+                  {!action.email && (
+                    <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 8 }}>
+                      ⚠ No email on file for this ticket — we won't be able to email the quote automatically.
+                      Add an email above, or send the client link yourself once you click below.
+                    </div>
+                  )}
                   <button className="btn btn-primary btn-sm" onClick={sendManualQuote} disabled={busy}>
-                    Mark Quote Sent
+                    Send Quote to Client
                   </button>
                 </div>
               )}

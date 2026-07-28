@@ -202,8 +202,21 @@ model Action {
   createdBy    User         @relation("CreatedBy", fields: [createdById], references: [id])
 
   statusHistory StatusHistory[]
+  subtasks      ActionSubtask[]
 
   @@map("actions")
+}
+
+model ActionSubtask {
+  id        Int      @id @default(autoincrement())
+  actionId  Int
+  text      String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  action Action @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@map("action_subtasks")
 }
 
 model StatusHistory {

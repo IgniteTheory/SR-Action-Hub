@@ -37,6 +37,8 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
   const [sendAcknowledgement, setSendAcknowledgement] = useState(false);
   const [needsQuote, setNeedsQuote] = useState(false);
   const [quoteFeeInput, setQuoteFeeInput] = useState('');
+  const [subtasks, setSubtasks] = useState<string[]>([]);
+  const [subtaskInput, setSubtaskInput] = useState('');
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -50,6 +52,17 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
 
   const selectedType = requestTypes.find((t) => t.id === requestTypeId);
   const isOther = selectedType?.name === 'Other';
+
+  function addSubtask() {
+    const text = subtaskInput.trim();
+    if (!text) return;
+    setSubtasks((prev) => [...prev, text]);
+    setSubtaskInput('');
+  }
+
+  function removeSubtask(index: number) {
+    setSubtasks((prev) => prev.filter((_, i) => i !== index));
+  }
 
   // Pre-fill the billing choice from the request type's usual default
   // whenever the type changes — staff can still override per ticket below.
@@ -118,6 +131,7 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
         sendAcknowledgement,
         needsQuote: isOther ? true : needsQuote,
         quoteFeeInput: needsQuote && quoteFeeInput !== '' ? Number(quoteFeeInput) : null,
+        subtasks: subtasks.length ? subtasks : undefined,
       });
       onCreated();
     } catch (err) {
@@ -215,6 +229,31 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
         <div className="field">
           <label>Description</label>
           <textarea id="ca_description" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label>Sub-tasks (optional)</label>
+          {subtasks.map((s, i) => (
+            <div key={i} className="subtask-row">
+              <span className="txt">{s}</span>
+              <button type="button" onClick={() => removeSubtask(i)} title="Remove">×</button>
+            </div>
+          ))}
+          <div className="subtask-add">
+            <input
+              type="text"
+              placeholder="e.g. Collect bank statements"
+              value={subtaskInput}
+              onChange={(e) => setSubtaskInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addSubtask();
+                }
+              }}
+            />
+            <button type="button" className="btn btn-ghost btn-sm" onClick={addSubtask} disabled={!subtaskInput.trim()}>Add</button>
+          </div>
         </div>
 
         {requestTypeId !== '' && (

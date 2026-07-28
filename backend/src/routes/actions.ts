@@ -24,7 +24,8 @@ const actionInclude = {
   contact: true,
   requestType: true,
   assignedTo: { select: userSummarySelect },
-  createdBy: { select: userSummarySelect }
+  createdBy: { select: userSummarySelect },
+  subtasks: { orderBy: { id: 'asc' } }
 } satisfies Prisma.ActionInclude;
 
 type ActionWithIncludes = Prisma.ActionGetPayload<{ include: typeof actionInclude }>;
@@ -34,7 +35,16 @@ type ActionWithIncludes = Prisma.ActionGetPayload<{ include: typeof actionInclud
 // quote or sending a manual one himself. Never throws — failures are
 // recorded on the action instead of breaking whatever request triggered it.
 async function attemptSendQuoteEmail(action: ActionWithIncludes, req: Request): Promise<ActionWithIncludes> {
-  if (!action.email || !action.quoteToken) return action;
+  if (!action.quoteToken) return action;
+
+  if (!action.email) {
+    console.error(`[quote-email] Skipped for ${action.ticketNumber}: no client email on file`);
+    return prisma.action.update({
+      where: { id: action.id },
+      data: { quoteEmailError: 'No client email on file' },
+      include: actionInclude
+    });
+  }
 
   const baseUrl = `${req.protocol}://${req.get('host')}`;
   const quoteLink = `${baseUrl}/quote/${action.quoteToken}`;
@@ -183,7 +193,10 @@ const createSchema = z.object({
   // subscription, or does it need a quote?" — falls back to the request
   // type's usual default when omitted, so routine work needs no extra click.
   needsQuote: z.boolean().optional(),
-  quoteFeeInput: z.number().nullable().optional()
+  quoteFeeInput: z.number().nullable().optional(),
+  // Optional checklist of sub-tasks to seed the ticket with; more can always
+  // be added later from the ticket detail view.
+  subtasks: z.array(z.string().min(1)).optional()
 });
 
 router.post('/', requireAuth, async (req, res) => {
@@ -281,6 +294,9 @@ router.post('/', requireAuth, async (req, res) => {
       createdById: req.user!.id,
       statusHistory: {
         create: historyEntries
+      },
+      subtasks: {
+        create: (data.subtasks ?? []).map((text) => ({ text }))
       }
     },
     include: actionInclude
@@ -593,6 +609,39 @@ router.post('/:id/approve-quote', requireAuth, async (req, res) => {
 
   action = await attemptSendQuoteEmail(action, req);
 
+  res.json({ action });
+});
+
+/* ---------- sub-tasks ---------- */
+
+const subtaskSchema = z.object({ text: z.string().min(1) });
+
+router.post('/:id/subtasks', requireAuth, async (req, res) => {
+  const actionId = Number(req.params.id);
+  const parsed = subtaskSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'text is required' });
+    return;
+  }
+  await prisma.actionSubtask.create({ data: { actionId, text: parsed.data.text } });
+  const action = await prisma.action.findUnique({ where: { id: actionId }, include: actionInclude });
+  res.status(201).json({ action });
+});
+
+router.patch('/:id/subtasks/:subId', requireAuth, async (req, res) => {
+  const actionId = Number(req.params.id);
+  const subId = Number(req.params.subId);
+  const done = Boolean(req.body?.done);
+  await prisma.actionSubtask.update({ where: { id: subId }, data: { done } });
+  const action = await prisma.action.findUnique({ where: { id: actionId }, include: actionInclude });
+  res.json({ action });
+});
+
+router.delete('/:id/subtasks/:subId', requireAuth, async (req, res) => {
+  const actionId = Number(req.params.id);
+  const subId = Number(req.params.subId);
+  await prisma.actionSubtask.delete({ where: { id: subId } });
+  const action = await prisma.action.findUnique({ where: { id: actionId }, include: actionInclude });
   res.json({ action });
 });
 

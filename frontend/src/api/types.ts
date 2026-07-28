@@ -65,6 +65,14 @@ export interface StatusHistoryEntry {
   note: string | null;
 }
 
+export interface ActionSubtask {
+  id: number;
+  actionId: number;
+  text: string;
+  done: boolean;
+  createdAt: string;
+}
+
 export interface Action {
   id: number;
   ticketNumber: string;
@@ -109,6 +117,7 @@ export interface Action {
   completedAt: string | null;
   deletedAt: string | null;
   statusHistory?: StatusHistoryEntry[];
+  subtasks: ActionSubtask[];
 }
 
 export interface DashboardKpis {
