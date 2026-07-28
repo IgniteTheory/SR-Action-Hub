@@ -1,26 +1,38 @@
 import nodemailer from 'nodemailer';
 import dns from 'dns';
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
+
 // nodemailer resolves both A and AAAA records for the SMTP host and then
 // picks a RANDOM address from the combined list to connect to (see
 // formatDNSValue in nodemailer/lib/shared) rather than always preferring
 // IPv4. Render's containers don't have a working IPv6 route out, so
 // whenever it randomly picks one of Office 365's AAAA addresses the
-// connection fails with ENETUNREACH — intermittently, since it depends on
-// the coin flip. We resolve the A record ourselves and connect to that IP
-// literal (with servername set for correct TLS/SNI) so nodemailer never
-// gets a chance to pick an IPv6 address.
+// connection fails with ENETUNREACH. We resolve the A record ourselves —
+// via dns.lookup(), the same OS-level resolution every other outbound
+// connection in this app already relies on, rather than nodemailer's
+// dns.resolve4()/resolve6() (a separate raw-DNS code path that isn't
+// guaranteed to work the same way inside a hosting platform's network) —
+// and connect to that IP literal (with servername set for correct
+// TLS/SNI) so nodemailer never gets a chance to pick an IPv6 address.
+// Bounded with a timeout so a slow/broken resolution can never hang the
+// request that triggered the email (e.g. ticket creation) — a failure
+// here should only ever cost this one email, recorded as an error.
 let cachedIp: { host: string; address: string; expires: number } | null = null;
 
 async function resolveIPv4(host: string): Promise<string> {
   if (cachedIp && cachedIp.host === host && cachedIp.expires > Date.now()) {
     return cachedIp.address;
   }
-  const addresses = await dns.promises.resolve4(host);
-  if (!addresses.length) {
-    throw new Error(`Could not resolve an IPv4 address for ${host}`);
-  }
-  const address = addresses[Math.floor(Math.random() * addresses.length)];
+  const { address } = await withTimeout(dns.promises.lookup(host, { family: 4 }), 4000, 'DNS lookup');
   cachedIp = { host, address, expires: Date.now() + 5 * 60 * 1000 };
   return address;
 }
@@ -34,6 +46,9 @@ async function getTransporter() {
     port: Number(process.env.SMTP_PORT) || 587,
     secure: false, // STARTTLS on 587, standard for Outlook/Office 365
     tls: { servername: host }, // keep TLS validating against the real hostname, not the IP
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS

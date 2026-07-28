@@ -302,36 +302,39 @@ router.post('/', requireAuth, async (req, res) => {
     include: actionInclude
   });
 
-  let responseAction = action;
-  if (responseAction.sendAcknowledgement && responseAction.email) {
-    try {
-      await sendAcknowledgementEmail({
-        ticketNumber: responseAction.ticketNumber,
-        contactName: responseAction.contactPerson,
-        contactEmail: responseAction.email,
-        description: responseAction.description,
-        expectedByFormatted: responseAction.dueAt.toLocaleString('en-ZA', {
-          day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-        })
-      });
-      console.log(`[acknowledgement-email] Sent for ${responseAction.ticketNumber}`);
-      responseAction = await prisma.action.update({
-        where: { id: responseAction.id },
-        data: { acknowledgementEmailSentAt: new Date(), acknowledgementEmailError: null },
-        include: actionInclude
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to send acknowledgement email';
-      console.error(`[acknowledgement-email] Failed for ${responseAction.ticketNumber}:`, err);
-      responseAction = await prisma.action.update({
-        where: { id: responseAction.id },
-        data: { acknowledgementEmailError: message },
-        include: actionInclude
-      });
-    }
-  }
+  // Respond as soon as the ticket itself is saved — an email hiccup (or a
+  // slow SMTP/DNS step) should never make ticket creation look like it
+  // failed. The acknowledgement send happens in the background; its
+  // sent/error status lands on the ticket for the next time it's fetched.
+  res.status(201).json({ action });
 
-  res.status(201).json({ action: responseAction });
+  if (action.sendAcknowledgement && action.email) {
+    void (async () => {
+      try {
+        await sendAcknowledgementEmail({
+          ticketNumber: action.ticketNumber,
+          contactName: action.contactPerson,
+          contactEmail: action.email!,
+          description: action.description,
+          expectedByFormatted: action.dueAt.toLocaleString('en-ZA', {
+            day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+          })
+        });
+        console.log(`[acknowledgement-email] Sent for ${action.ticketNumber}`);
+        await prisma.action.update({
+          where: { id: action.id },
+          data: { acknowledgementEmailSentAt: new Date(), acknowledgementEmailError: null }
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to send acknowledgement email';
+        console.error(`[acknowledgement-email] Failed for ${action.ticketNumber}:`, err);
+        await prisma.action.update({
+          where: { id: action.id },
+          data: { acknowledgementEmailError: message }
+        });
+      }
+    })();
+  }
 });
 
 const updateSchema = z.object({
