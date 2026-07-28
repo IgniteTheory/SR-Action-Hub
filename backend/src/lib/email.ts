@@ -1,21 +1,44 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
 
-let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
+// nodemailer resolves both A and AAAA records for the SMTP host and then
+// picks a RANDOM address from the combined list to connect to (see
+// formatDNSValue in nodemailer/lib/shared) rather than always preferring
+// IPv4. Render's containers don't have a working IPv6 route out, so
+// whenever it randomly picks one of Office 365's AAAA addresses the
+// connection fails with ENETUNREACH — intermittently, since it depends on
+// the coin flip. We resolve the A record ourselves and connect to that IP
+// literal (with servername set for correct TLS/SNI) so nodemailer never
+// gets a chance to pick an IPv6 address.
+let cachedIp: { host: string; address: string; expires: number } | null = null;
 
-function getTransporter() {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.office365.com',
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false, // STARTTLS on 587, standard for Outlook/Office 365
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
+async function resolveIPv4(host: string): Promise<string> {
+  if (cachedIp && cachedIp.host === host && cachedIp.expires > Date.now()) {
+    return cachedIp.address;
   }
-  return transporter;
+  const addresses = await dns.promises.resolve4(host);
+  if (!addresses.length) {
+    throw new Error(`Could not resolve an IPv4 address for ${host}`);
+  }
+  const address = addresses[Math.floor(Math.random() * addresses.length)];
+  cachedIp = { host, address, expires: Date.now() + 5 * 60 * 1000 };
+  return address;
+}
+
+async function getTransporter() {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
+  const host = process.env.SMTP_HOST || 'smtp.office365.com';
+  const ip = await resolveIPv4(host);
+  return nodemailer.createTransport({
+    host: ip,
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: false, // STARTTLS on 587, standard for Outlook/Office 365
+    tls: { servername: host }, // keep TLS validating against the real hostname, not the IP
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
 }
 
 export function emailIsConfigured(): boolean {
@@ -40,7 +63,7 @@ interface SendArgs {
 // Throws on failure — callers should catch and record the error rather than
 // let a mail hiccup break the request that triggered it.
 async function send(args: SendArgs): Promise<void> {
-  const t = getTransporter();
+  const t = await getTransporter();
   if (!t) {
     throw new Error('Email is not configured yet (SMTP_USER / SMTP_PASS not set).');
   }
