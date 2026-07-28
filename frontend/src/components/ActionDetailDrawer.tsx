@@ -12,6 +12,7 @@ import {
   STATUS_LABELS,
   TURNAROUND_LABELS,
 } from '../utils/format';
+import { buildAcknowledgementEmail, buildCompletionEmail, buildQuoteEmail, mailtoLink, type EmailDraft } from '../utils/emailTemplates';
 
 interface Props {
   action: Action;
@@ -37,6 +38,7 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
   const [quoteAmountInput, setQuoteAmountInput] = useState(action.quoteAmount ?? '');
   const [quoteDueDateInput, setQuoteDueDateInput] = useState('');
   const [subtaskInput, setSubtaskInput] = useState('');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showAddQuote, setShowAddQuote] = useState(false);
   const [addQuoteFeeInput, setAddQuoteFeeInput] = useState('');
   const [showEdit, setShowEdit] = useState(false);
@@ -132,6 +134,27 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
     if (quoteLink) navigator.clipboard.writeText(quoteLink);
   }
 
+  function copyEmailDraft(draft: EmailDraft, key: string) {
+    navigator.clipboard.writeText(`Subject: ${draft.subject}\n\n${draft.body}`);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 2000);
+  }
+
+  function emailActions(draft: EmailDraft, key: string) {
+    return (
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => copyEmailDraft(draft, key)}>
+          {copiedKey === key ? 'Copied!' : 'Copy Email Text'}
+        </button>
+        {action.email && (
+          <a className="btn btn-ghost btn-sm" href={mailtoLink(action.email, draft)} target="_blank" rel="noreferrer">
+            Open in Email App
+          </a>
+        )}
+      </div>
+    );
+  }
+
   function submitAddQuote() {
     const feeInput = addQuoteFeeInput === '' ? null : Number(addQuoteFeeInput);
     run(() => api.post(`/actions/${action.id}/request-quote`, { feeInput })).then(() => {
@@ -202,9 +225,12 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
                   </span>
                 )}
                 {action.acknowledgementEmailError && (
-                  <span style={{ color: 'var(--red)' }}>
-                    ⚠ Acknowledgement email failed — {action.acknowledgementEmailError}
-                  </span>
+                  <>
+                    <div style={{ color: 'var(--red)', marginBottom: 6 }}>
+                      ⚠ Acknowledgement email failed — {action.acknowledgementEmailError}
+                    </div>
+                    {emailActions(buildAcknowledgementEmail(action), 'acknowledgement')}
+                  </>
                 )}
               </div>
             )}
@@ -347,7 +373,12 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
                   )}
                   {action.quoteEmailError && (
                     <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 8 }}>
-                      ⚠ Quote email failed — {action.quoteEmailError}. Send the link manually instead.
+                      ⚠ Quote email failed — {action.quoteEmailError}
+                    </div>
+                  )}
+                  {quoteLink && (
+                    <div style={{ marginBottom: 10 }}>
+                      {emailActions(buildQuoteEmail(action, quoteLink), 'quote')}
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -477,9 +508,12 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
               </span>
             )}
             {action.completionEmailError && (
-              <span style={{ color: 'var(--red)' }}>
-                ⚠ Completion email failed — {action.completionEmailError}. Follow up with the client directly.
-              </span>
+              <>
+                <div style={{ color: 'var(--red)', marginBottom: 6 }}>
+                  ⚠ Completion email failed — {action.completionEmailError}
+                </div>
+                {emailActions(buildCompletionEmail(action), 'completion')}
+              </>
             )}
           </div>
         )}
