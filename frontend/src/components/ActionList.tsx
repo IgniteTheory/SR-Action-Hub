@@ -12,17 +12,19 @@ export default function ActionList({ actions, onSelect }: Props) {
   }
 
   const now = Date.now();
+  const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
 
   return (
     <div className="action-list">
       {actions.map((a) => {
         const needsManualQuote = a.quoteStatus === 'NEEDS_MANUAL_QUOTE';
         const overdue = new Date(a.dueAt).getTime() < now && a.status !== 'COMPLETED' && a.status !== 'CANCELLED';
+        const stale =
+          a.status !== 'COMPLETED' && a.status !== 'CANCELLED' && now - new Date(a.updatedAt).getTime() > fourDaysMs;
         return (
           <div key={a.id} className={`action-row${needsManualQuote ? ' quote-flag' : ''}`} onClick={() => onSelect(a)}>
-            <div className="ticket">{a.ticketNumber}</div>
             <div className="main-info">
-              <div className="client">{a.client.name}</div>
+              <div className="client">{a.client.name}{stale && <span className="stale-badge" title="No updates in 4+ days">⏰ Stale</span>}</div>
               <div className="desc">{a.description}</div>
             </div>
             <div>

@@ -92,7 +92,7 @@ button, input, select, textarea { font-family: var(--sans); }
 .page-header h1 { font-size: 20px; margin: 0; }
 
 /* KPI cards */
-.kpi-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpi-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; margin-bottom: 20px; }
 .kpi-card {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 14px 16px; box-shadow: var(--shadow);
@@ -105,6 +105,7 @@ button, input, select, textarea { font-family: var(--sans); }
 .kpi-card.completed .value { color: var(--green); }
 .kpi-card.new .value { color: var(--blue); }
 .kpi-card.approval .value { color: #7c3aed; }
+.kpi-card.stale .value { color: var(--amber); }
 
 /* Staff tabs */
 .staff-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -120,12 +121,10 @@ button, input, select, textarea { font-family: var(--sans); }
   flex: 1; min-width: 220px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
   font-size: 13.5px; background: #fff;
 }
-.filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.filter-chips button {
-  border: 1px solid var(--border); background: #fff; padding: 6px 12px; border-radius: 16px;
-  font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--text-muted);
+.filter-select {
+  padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; font-weight: 600; color: var(--text); background: #fff; cursor: pointer;
 }
-.filter-chips button.active { background: var(--green); color: #fff; border-color: var(--green); }
 
 /* Dashboard layout + side rail (Working On / Completed) */
 .dashboard-layout { display: flex; gap: 20px; align-items: flex-start; }
@@ -158,7 +157,7 @@ button, input, select, textarea { font-family: var(--sans); }
 .action-list { display: flex; flex-direction: column; gap: 8px; }
 .action-row {
   display: grid;
-  grid-template-columns: 110px 1fr 140px 110px 130px 110px 90px;
+  grid-template-columns: 1fr 140px 110px 130px 110px 90px;
   align-items: center;
   gap: 12px;
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -166,7 +165,6 @@ button, input, select, textarea { font-family: var(--sans); }
 }
 .action-row:hover { border-color: var(--green); }
 .action-row.quote-flag { border-left: 4px solid var(--red); }
-.action-row .ticket { font-size: 11.5px; color: var(--text-muted); font-weight: 700; }
 .action-row .main-info .client { font-weight: 700; font-size: 13.5px; }
 .action-row .main-info .desc { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .action-row .assignee { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; }
@@ -192,6 +190,11 @@ button, input, select, textarea { font-family: var(--sans); }
 .quote-badge.PENDING_APPROVAL { background: #f1eafe; color: #7c3aed; }
 .quote-badge.ACCEPTED { background: var(--green-light); color: var(--green-dark); }
 .quote-badge.DECLINED { background: #f3f3f3; color: var(--text-muted); }
+
+.stale-badge {
+  display: inline-block; margin-left: 8px; font-size: 10.5px; font-weight: 700;
+  color: var(--amber); background: var(--amber-bg); padding: 2px 7px; border-radius: 10px;
+}
 
 .status-pill { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
 .status-pill.NEW { background: var(--blue-bg); color: var(--blue); }

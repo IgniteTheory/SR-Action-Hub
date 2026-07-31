@@ -35,6 +35,8 @@ export interface Client {
   id: number;
   name: string;
   notes: string | null;
+  assignedAccountantId: number | null;
+  assignedAccountant?: UserSummary | null;
   contacts?: Contact[];
   actions?: Action[];
 }
@@ -116,6 +118,8 @@ export interface Action {
   updatedAt: string;
   completedAt: string | null;
   deletedAt: string | null;
+  linkedActionId: number | null;
+  linkedAction?: { id: number; status: ActionStatus; assignedTo: UserSummary | null } | null;
   statusHistory?: StatusHistoryEntry[];
   subtasks: ActionSubtask[];
 }
@@ -127,5 +131,6 @@ export interface DashboardKpis {
   completedToday: number;
   newActions: number;
   approvalPending: number;
+  stale: number;
   avgTurnaroundHours: number | null;
 }

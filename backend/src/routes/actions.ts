@@ -25,7 +25,10 @@ const actionInclude = {
   requestType: true,
   assignedTo: { select: userSummarySelect },
   createdBy: { select: userSummarySelect },
-  subtasks: { orderBy: { id: 'asc' } }
+  subtasks: { orderBy: { id: 'asc' } },
+  linkedAction: {
+    select: { id: true, status: true, assignedTo: { select: userSummarySelect } }
+  }
 } satisfies Prisma.ActionInclude;
 
 type ActionWithIncludes = Prisma.ActionGetPayload<{ include: typeof actionInclude }>;
@@ -137,6 +140,12 @@ router.get('/', requireAuth, async (req, res) => {
     case 'approval-pending':
       where.quoteStatus = 'PENDING_APPROVAL';
       break;
+    case 'stale': {
+      const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
+      where.status = { notIn: ['COMPLETED', 'CANCELLED'] };
+      where.updatedAt = { lt: fourDaysAgo };
+      break;
+    }
   }
 
   // Completed tickets move to the dedicated Completed list/tab — keep them
@@ -218,7 +227,10 @@ router.post('/', requireAuth, async (req, res) => {
     clientId = client.id;
   }
 
-  const requestType = await prisma.requestType.findUnique({ where: { id: data.requestTypeId } });
+  const [requestType, client] = await Promise.all([
+    prisma.requestType.findUnique({ where: { id: data.requestTypeId } }),
+    prisma.client.findUnique({ where: { id: clientId! } })
+  ]);
   if (!requestType) {
     res.status(400).json({ error: 'Invalid request type' });
     return;
@@ -231,7 +243,10 @@ router.post('/', requireAuth, async (req, res) => {
   // A fee entered (typed in now, or pulled from the request type's price
   // list) sends it to Stephan for a quick internal approval before it's
   // emailed to the client; leaving the fee blank flags Stephan to price it
-  // himself from scratch.
+  // himself from scratch. Either way, anything that needs a quote is
+  // assigned to Stephan — if the client also has an assigned accountant,
+  // that accountant gets their own duplicate ticket to prep in parallel
+  // (see below, after the ticket itself is created).
   const forcedQuote = requestType.name === 'Other';
   const needsQuote = forcedQuote ? true : (data.needsQuote ?? requestType.quoteBehavior !== 'NEVER');
 
@@ -239,16 +254,19 @@ router.post('/', requireAuth, async (req, res) => {
   let quoteStatus: 'NOT_NEEDED' | 'NEEDS_MANUAL_QUOTE' | 'NEEDS_INTERNAL_APPROVAL' = 'NOT_NEEDED';
   let quoteAmount: Prisma.Decimal | null = null;
   let quoteNote: string | null = null;
+  let stephanId: number | null = null;
 
   if (needsQuote) {
+    const stephan = await prisma.user.findFirst({ where: { name: 'Stephan' } });
+    stephanId = stephan?.id ?? null;
+    if (stephanId) assignedToId = stephanId;
+
     const feeInput = data.quoteFeeInput ?? (requestType.price != null ? Number(requestType.price) : null);
     if (feeInput != null) {
       quoteAmount = new Prisma.Decimal(feeInput);
       quoteStatus = 'NEEDS_INTERNAL_APPROVAL';
       quoteNote = 'Quote drafted — awaiting Stephan’s approval before it’s sent to the client';
     } else {
-      const stephan = await prisma.user.findFirst({ where: { name: 'Stephan' } });
-      if (stephan) assignedToId = stephan.id;
       quoteStatus = 'NEEDS_MANUAL_QUOTE';
       quoteNote = 'Flagged for Stephan — needs a quote drawn up';
     }
@@ -302,11 +320,47 @@ router.post('/', requireAuth, async (req, res) => {
     include: actionInclude
   });
 
+  // A quote-needed ticket goes to Stephan; if the client has an assigned
+  // accountant (and it isn't Stephan himself), they get their own duplicate
+  // ticket so they can start prepping without waiting on the quote.
+  let duplicateAction: typeof action | null = null;
+  if (needsQuote && client?.assignedAccountantId && client.assignedAccountantId !== stephanId) {
+    const dupTicketNumber = await nextTicketNumber();
+    duplicateAction = await prisma.action.create({
+      data: {
+        ticketNumber: dupTicketNumber,
+        clientId: clientId!,
+        contactId: data.contactId,
+        contactPerson: data.contactPerson,
+        telephone: data.telephone,
+        email: data.email,
+        communicationSource: data.communicationSource,
+        requestTypeId: data.requestTypeId,
+        otherRequestDetail: data.otherRequestDetail,
+        description: data.description,
+        assignedToId: client.assignedAccountantId,
+        priority: data.priority,
+        turnaround: data.turnaround,
+        customTurnaroundHours: data.customTurnaroundHours,
+        dueAt,
+        status: 'ALLOCATED',
+        quoteStatus: 'NOT_NEEDED',
+        createdById: req.user!.id,
+        linkedActionId: action.id,
+        statusHistory: {
+          create: [{ toStatus: 'ALLOCATED', changedById: req.user!.id, note: `Auto-created — quote in progress with Stephan` }]
+        }
+      },
+      include: actionInclude
+    });
+    await prisma.action.update({ where: { id: action.id }, data: { linkedActionId: duplicateAction.id } });
+  }
+
   // Respond as soon as the ticket itself is saved — an email hiccup (or a
   // slow SMTP/DNS step) should never make ticket creation look like it
   // failed. The acknowledgement send happens in the background; its
   // sent/error status lands on the ticket for the next time it's fetched.
-  res.status(201).json({ action });
+  res.status(201).json({ action, duplicateAction });
 
   if (action.sendAcknowledgement && action.email) {
     void (async () => {
@@ -645,13 +699,14 @@ router.post('/:id/request-quote', requireAuth, async (req, res) => {
   let assignedToId = existing.assignedToId;
   let note: string;
 
+  const stephan = await prisma.user.findFirst({ where: { name: 'Stephan' } });
+  if (stephan) assignedToId = stephan.id;
+
   if (feeInput != null) {
     quoteAmount = new Prisma.Decimal(feeInput);
     quoteStatus = 'NEEDS_INTERNAL_APPROVAL';
     note = 'Additional quote drafted — awaiting Stephan’s approval before it’s sent to the client';
   } else {
-    const stephan = await prisma.user.findFirst({ where: { name: 'Stephan' } });
-    if (stephan) assignedToId = stephan.id;
     quoteStatus = 'NEEDS_MANUAL_QUOTE';
     note = 'Additional quote flagged for Stephan — needs a quote drawn up';
   }

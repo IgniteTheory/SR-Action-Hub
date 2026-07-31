@@ -19,6 +19,8 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
   const [clients, setClients] = useState<Client[]>([]);
   const [clientQuery, setClientQuery] = useState('');
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [contactId, setContactId] = useState<number | undefined>(undefined);
   const [newClientName, setNewClientName] = useState('');
 
   const [contactPerson, setContactPerson] = useState('');
@@ -52,6 +54,22 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
 
   const selectedType = requestTypes.find((t) => t.id === requestTypeId);
   const isOther = selectedType?.name === 'Other';
+
+  function selectClient(c: Client) {
+    setSelectedClientId(c.id);
+    setSelectedClient(c);
+    setClientQuery(c.name);
+    const primaryContact = c.contacts?.[0];
+    if (primaryContact) {
+      setContactId(primaryContact.id);
+      setContactPerson(primaryContact.name);
+      setTelephone(primaryContact.phone ?? '');
+      setEmail(primaryContact.email ?? '');
+    } else {
+      setContactId(undefined);
+    }
+    if (c.assignedAccountantId) setAssignedToId(c.assignedAccountantId);
+  }
 
   function addSubtask() {
     const text = subtaskInput.trim();
@@ -116,6 +134,7 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
       await api.post('/actions', {
         clientId: selectedClientId ?? undefined,
         newClientName: selectedClientId ? undefined : newClientName.trim(),
+        contactId,
         contactPerson: contactPerson.trim(),
         telephone: telephone.trim() || undefined,
         email: email.trim() || undefined,
@@ -155,6 +174,7 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
             onChange={(e) => {
               setClientQuery(e.target.value);
               setSelectedClientId(null);
+              setSelectedClient(null);
             }}
             placeholder="Type to search…"
           />
@@ -164,14 +184,19 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
                 <div
                   key={c.id}
                   style={{ padding: '7px 10px', cursor: 'pointer', fontSize: 13 }}
-                  onClick={() => {
-                    setSelectedClientId(c.id);
-                    setClientQuery(c.name);
-                  }}
+                  onClick={() => selectClient(c)}
                 >
                   {c.name}
                 </div>
               ))}
+            </div>
+          )}
+          {selectedClient && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+              {selectedClient.contacts?.length ? 'Contact details auto-filled from client record. ' : ''}
+              {selectedClient.assignedAccountantId
+                ? `Usually handled by ${selectedClient.assignedAccountant?.name ?? 'their accountant'} — assigned automatically.`
+                : 'No accountant assigned to this client yet.'}
             </div>
           )}
         </div>
@@ -293,6 +318,12 @@ export default function CreateActionDrawer({ users, requestTypes, onClose, onCre
                   onChange={(e) => setQuoteFeeInput(e.target.value)}
                   placeholder="R"
                 />
+                <div style={{ fontSize: 12, color: 'var(--amber)', marginTop: 4 }}>
+                  This will be assigned to Stephan.
+                  {selectedClient?.assignedAccountantId
+                    ? ` A duplicate ticket will also go to ${selectedClient.assignedAccountant?.name ?? 'their accountant'} to start prepping.`
+                    : ''}
+                </div>
               </div>
             )}
           </>

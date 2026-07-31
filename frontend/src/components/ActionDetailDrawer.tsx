@@ -29,6 +29,10 @@ const STATUS_OPTIONS: ActionStatus[] = [
 export default function ActionDetailDrawer({ action, users, onClose, onUpdated }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMINISTRATOR';
+  const isStale =
+    action.status !== 'COMPLETED' &&
+    action.status !== 'CANCELLED' &&
+    Date.now() - new Date(action.updatedAt).getTime() > 4 * 24 * 60 * 60 * 1000;
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +86,7 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
   }
 
   function deleteAction() {
-    if (!confirm(`Delete ${action.ticketNumber}? An administrator can restore it later.`)) return;
+    if (!confirm(`Delete this action for ${action.client.name}? An administrator can restore it later.`)) return;
     run(() => api.delete(`/actions/${action.id}`)).then(() => onClose());
   }
 
@@ -187,10 +191,7 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
     <div className="drawer-overlay" onClick={onClose}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 700 }}>{action.ticketNumber}</div>
-            <h2 style={{ margin: '2px 0 0' }}>{action.client.name}</h2>
-          </div>
+          <h2 style={{ margin: 0 }}>{action.client.name}</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowEdit((v) => !v)} disabled={busy}>
               {showEdit ? 'Cancel Edit' : 'Edit'}
@@ -205,6 +206,18 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
           </div>
         )}
 
+        {action.linkedAction && (
+          <div style={{ background: '#eef1f0', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, fontSize: 12.5, margin: '12px 0' }}>
+            Linked ticket — needs a quote. {action.linkedAction.assignedTo ? `Also assigned to ${action.linkedAction.assignedTo.name}` : 'Unallocated'} ({STATUS_LABELS[action.linkedAction.status]})
+          </div>
+        )}
+
+        {isStale && (
+          <div style={{ background: 'var(--amber-bg)', color: 'var(--amber)', padding: '8px 10px', borderRadius: 8, fontSize: 12.5, margin: '12px 0', fontWeight: 700 }}>
+            ⏰ No updates in 4+ days
+          </div>
+        )}
+
         {!showEdit ? (
           <>
             <div className="detail-row"><span>Contact</span><b>{action.contactPerson}</b></div>
@@ -216,6 +229,10 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
             <div className="detail-row"><span>Turnaround</span><b>{TURNAROUND_LABELS[action.turnaround]}</b></div>
             <div className="detail-row"><span>Due</span><b>{formatDateTime(action.dueAt)}</b></div>
             <div className="detail-row"><span>Created by</span><b>{action.createdBy.name}</b></div>
+            <div className="detail-row">
+              <span>Last updated</span>
+              <b style={isStale ? { color: 'var(--amber)' } : undefined}>{formatDateTime(action.updatedAt)}</b>
+            </div>
 
             {action.sendAcknowledgement && (
               <div style={{ fontSize: 12, margin: '6px 0' }}>

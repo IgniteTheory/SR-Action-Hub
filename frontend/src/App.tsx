@@ -4,6 +4,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import QuotePage from './pages/QuotePage';
 import RequestTypesPage from './pages/RequestTypesPage';
+import ClientsPage from './pages/ClientsPage';
 import { initials } from './utils/format';
 
 function AppShell() {
@@ -19,7 +20,10 @@ function AppShell() {
         <ul className="sidebar-nav">
           <li><NavLink to="/" end className={({ isActive }) => (isActive ? 'active' : '')}>Dashboard</NavLink></li>
           {isAdmin && (
-            <li><NavLink to="/settings/request-types" className={({ isActive }) => (isActive ? 'active' : '')}>Request Types</NavLink></li>
+            <>
+              <li><NavLink to="/clients" className={({ isActive }) => (isActive ? 'active' : '')}>Clients</NavLink></li>
+              <li><NavLink to="/settings/request-types" className={({ isActive }) => (isActive ? 'active' : '')}>Request Types</NavLink></li>
+            </>
           )}
         </ul>
         <div className="sidebar-user">
@@ -34,6 +38,7 @@ function AppShell() {
       <main className="main-area">
         <Routes>
           <Route path="/" element={<DashboardPage />} />
+          {isAdmin && <Route path="/clients" element={<ClientsPage />} />}
           {isAdmin && <Route path="/settings/request-types" element={<RequestTypesPage />} />}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

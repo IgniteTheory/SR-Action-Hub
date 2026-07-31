@@ -12,8 +12,9 @@ router.get('/kpis', requireAuth, async (req, res) => {
   endOfToday.setDate(endOfToday.getDate() + 1);
 
   const baseWhere = { deletedAt: null, ...(assignedToId ? { assignedToId } : {}) };
+  const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
 
-  const [overdue, dueToday, waiting, completedToday, newActions, approvalPending, completedForAvg] = await Promise.all([
+  const [overdue, dueToday, waiting, completedToday, newActions, approvalPending, stale, completedForAvg] = await Promise.all([
     prisma.action.count({
       where: { ...baseWhere, dueAt: { lt: now }, status: { notIn: ['COMPLETED', 'CANCELLED'] } }
     }),
@@ -31,6 +32,9 @@ router.get('/kpis', requireAuth, async (req, res) => {
     }),
     prisma.action.count({
       where: { ...baseWhere, quoteStatus: { in: ['NEEDS_MANUAL_QUOTE', 'NEEDS_INTERNAL_APPROVAL', 'PENDING_APPROVAL'] } }
+    }),
+    prisma.action.count({
+      where: { ...baseWhere, status: { notIn: ['COMPLETED', 'CANCELLED'] }, updatedAt: { lt: fourDaysAgo } }
     }),
     prisma.action.findMany({
       where: { ...baseWhere, status: 'COMPLETED', completedAt: { not: null } },
@@ -53,6 +57,7 @@ router.get('/kpis', requireAuth, async (req, res) => {
     completedToday,
     newActions,
     approvalPending,
+    stale,
     avgTurnaroundHours
   });
 });

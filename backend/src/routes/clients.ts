@@ -1,17 +1,26 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
-import { requireAuth } from '../middleware/auth';
+import { requireAdmin, requireAuth } from '../middleware/auth';
 
 const router = Router();
+
+const userSummarySelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  colour: true,
+  requiresTimesheetCheck: true
+} as const;
 
 router.get('/', requireAuth, async (req, res) => {
   const search = String(req.query.search || '').trim();
   const clients = await prisma.client.findMany({
     where: search ? { name: { contains: search, mode: 'insensitive' } } : undefined,
-    include: { contacts: true },
+    include: { contacts: true, assignedAccountant: { select: userSummarySelect } },
     orderBy: { name: 'asc' },
-    take: 50
+    take: search ? 50 : 500
   });
   res.json({ clients });
 });
@@ -22,6 +31,7 @@ router.get('/:id', requireAuth, async (req, res) => {
     where: { id },
     include: {
       contacts: true,
+      assignedAccountant: { select: userSummarySelect },
       actions: {
         orderBy: { createdAt: 'desc' },
         include: { assignedTo: true, requestType: true }
@@ -32,6 +42,28 @@ router.get('/:id', requireAuth, async (req, res) => {
     res.status(404).json({ error: 'Client not found' });
     return;
   }
+  res.json({ client });
+});
+
+const updateSchema = z.object({
+  assignedAccountantId: z.number().nullable().optional()
+});
+
+// Chanel (admin) uses this to set each client's usual accountant — new
+// tickets for that client auto-assign to them, and it's who the duplicate
+// ticket goes to when a request needs a quote.
+router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const parsed = updateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid update' });
+    return;
+  }
+  const client = await prisma.client.update({
+    where: { id },
+    data: parsed.data,
+    include: { contacts: true, assignedAccountant: { select: userSummarySelect } }
+  });
   res.json({ client });
 });
 

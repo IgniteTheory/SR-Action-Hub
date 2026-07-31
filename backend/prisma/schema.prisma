@@ -85,28 +85,31 @@ model User {
   requiresTimesheetCheck Boolean @default(false)
   createdAt             DateTime @default(now())
 
-  createdActions   Action[]        @relation("CreatedBy")
-  assignedActions  Action[]        @relation("AssignedTo")
-  statusChanges    StatusHistory[]
+  createdActions    Action[]        @relation("CreatedBy")
+  assignedActions   Action[]        @relation("AssignedTo")
+  statusChanges     StatusHistory[]
+  accountantClients Client[]        @relation("AssignedAccountant")
 
   @@map("users")
 }
 
 model Client {
-  id             Int      @id @default(autoincrement())
-  name           String   @unique
-  entityType     String?
-  active         Boolean  @default(true)
-  registrationNr String?
-  vatNr          String?
-  taxNr          String?
-  payeNr         String?
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   Int      @id @default(autoincrement())
+  name                 String   @unique
+  entityType           String?
+  active               Boolean  @default(true)
+  registrationNr       String?
+  vatNr                String?
+  taxNr                String?
+  payeNr               String?
+  notes                String?
+  assignedAccountantId Int?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  contacts Contact[]
-  actions  Action[]
+  assignedAccountant User?     @relation("AssignedAccountant", fields: [assignedAccountantId], references: [id])
+  contacts           Contact[]
+  actions            Action[]
 
   @@map("clients")
 }
@@ -195,11 +198,18 @@ model Action {
   deletedAt               DateTime?
   deletedById              Int?
 
+  // Set on both sides when a "needs a quote" ticket auto-creates a duplicate
+  // for the client's assigned accountant to prep in parallel — see the
+  // create-action logic in actions.ts.
+  linkedActionId          Int?
+
   client       Client       @relation(fields: [clientId], references: [id])
   contact      Contact?     @relation(fields: [contactId], references: [id])
   requestType  RequestType  @relation(fields: [requestTypeId], references: [id])
   assignedTo   User?        @relation("AssignedTo", fields: [assignedToId], references: [id])
   createdBy    User         @relation("CreatedBy", fields: [createdById], references: [id])
+  linkedAction Action?      @relation("LinkedAction", fields: [linkedActionId], references: [id])
+  linkedFrom   Action[]     @relation("LinkedAction")
 
   statusHistory StatusHistory[]
   subtasks      ActionSubtask[]
