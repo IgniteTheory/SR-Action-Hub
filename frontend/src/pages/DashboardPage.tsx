@@ -91,8 +91,6 @@ export default function DashboardPage() {
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ New Action</button>
       </div>
 
-      <KpiCards kpis={kpis} />
-
       <div className="dashboard-layout">
         <div className="dashboard-main">
           <StaffTabs users={users} activeId={staffFilter} onChange={setStaffFilter} />
@@ -103,6 +101,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="side-rail">
+          <KpiCards kpis={kpis} />
           <WorkingOnPanel actions={workingOnActions} onSelect={openAction} />
           <CompletedRail actions={completedActions} onSelect={openAction} />
         </div>

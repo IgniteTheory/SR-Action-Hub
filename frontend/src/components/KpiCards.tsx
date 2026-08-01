@@ -3,39 +3,39 @@ import type { DashboardKpis } from '../api/types';
 export default function KpiCards({ kpis }: { kpis: DashboardKpis | null }) {
   if (!kpis) return null;
   return (
-    <div className="kpi-row">
-      <div className="kpi-card overdue">
-        <div className="value">{kpis.overdue}</div>
-        <div className="label">🔴 Overdue</div>
-      </div>
-      <div className="kpi-card due-today">
-        <div className="value">{kpis.dueToday}</div>
-        <div className="label">🟠 Due Today</div>
-      </div>
-      <div className="kpi-card waiting">
-        <div className="value">{kpis.waiting}</div>
-        <div className="label">🟡 Waiting</div>
-      </div>
-      <div className="kpi-card completed">
-        <div className="value">{kpis.completedToday}</div>
-        <div className="label">🟢 Completed Today</div>
-      </div>
-      <div className="kpi-card new">
-        <div className="value">{kpis.newActions}</div>
-        <div className="label">📥 New Actions</div>
-      </div>
-      <div className="kpi-card approval">
-        <div className="value">{kpis.approvalPending}</div>
-        <div className="label">🧾 Approval Pending</div>
-      </div>
-      <div className="kpi-card stale">
-        <div className="value">{kpis.stale}</div>
-        <div className="label">⏰ Stale (4+ days)</div>
-      </div>
-      <div className="kpi-card">
-        <div className="value">{kpis.avgTurnaroundHours != null ? `${kpis.avgTurnaroundHours}h` : '—'}</div>
-        <div className="label">📈 Avg Turnaround</div>
-      </div>
+    <div className="kpi-mini-row">
+      <button type="button" className="kpi-mini overdue">
+        <span className="value">🔴 {kpis.overdue}</span>
+        <span className="label">Overdue</span>
+      </button>
+      <button type="button" className="kpi-mini due-today">
+        <span className="value">🟠 {kpis.dueToday}</span>
+        <span className="label">Due Today</span>
+      </button>
+      <button type="button" className="kpi-mini waiting">
+        <span className="value">🟡 {kpis.waiting}</span>
+        <span className="label">Waiting</span>
+      </button>
+      <button type="button" className="kpi-mini completed">
+        <span className="value">🟢 {kpis.completedToday}</span>
+        <span className="label">Completed Today</span>
+      </button>
+      <button type="button" className="kpi-mini new">
+        <span className="value">📥 {kpis.newActions}</span>
+        <span className="label">New</span>
+      </button>
+      <button type="button" className="kpi-mini approval">
+        <span className="value">🧾 {kpis.approvalPending}</span>
+        <span className="label">Approval Pending</span>
+      </button>
+      <button type="button" className="kpi-mini stale">
+        <span className="value">⏰ {kpis.stale}</span>
+        <span className="label">Stale</span>
+      </button>
+      <button type="button" className="kpi-mini">
+        <span className="value">📈 {kpis.avgTurnaroundHours != null ? `${kpis.avgTurnaroundHours}h` : '—'}</span>
+        <span className="label">Avg Turnaround</span>
+      </button>
     </div>
   );
 }

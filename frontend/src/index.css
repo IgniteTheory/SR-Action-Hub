@@ -91,21 +91,23 @@ button, input, select, textarea { font-family: var(--sans); }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .page-header h1 { font-size: 20px; margin: 0; }
 
-/* KPI cards */
-.kpi-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; margin-bottom: 20px; }
-.kpi-card {
-  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 14px 16px; box-shadow: var(--shadow);
+/* KPI buttons — compact, colour-coded, sit in the side rail */
+.kpi-mini-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+.kpi-mini {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 6px 11px; font-size: 12px; font-weight: 700; box-shadow: var(--shadow);
+  cursor: default; font-family: var(--sans);
 }
-.kpi-card .value { font-size: 26px; font-weight: 800; line-height: 1.1; }
-.kpi-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; font-weight: 600; }
-.kpi-card.overdue .value { color: var(--red); }
-.kpi-card.due-today .value { color: var(--amber); }
-.kpi-card.waiting .value { color: var(--amber); }
-.kpi-card.completed .value { color: var(--green); }
-.kpi-card.new .value { color: var(--blue); }
-.kpi-card.approval .value { color: #7c3aed; }
-.kpi-card.stale .value { color: var(--amber); }
+.kpi-mini .value { font-weight: 800; }
+.kpi-mini .label { color: var(--text-muted); font-weight: 600; }
+.kpi-mini.overdue .value { color: var(--red); }
+.kpi-mini.due-today .value { color: var(--amber); }
+.kpi-mini.waiting .value { color: var(--amber); }
+.kpi-mini.completed .value { color: var(--green); }
+.kpi-mini.new .value { color: var(--blue); }
+.kpi-mini.approval .value { color: #7c3aed; }
+.kpi-mini.stale .value { color: var(--amber); }
 
 /* Staff tabs */
 .staff-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -121,10 +123,12 @@ button, input, select, textarea { font-family: var(--sans); }
   flex: 1; min-width: 220px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
   font-size: 13.5px; background: #fff;
 }
-.filter-select {
-  padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
-  font-size: 13px; font-weight: 600; color: var(--text); background: #fff; cursor: pointer;
+.filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.filter-chips button {
+  border: 1px solid var(--border); background: #fff; padding: 6px 12px; border-radius: 16px;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--text-muted);
 }
+.filter-chips button.active { background: var(--green); color: #fff; border-color: var(--green); }
 
 /* Dashboard layout + side rail (Working On / Completed) */
 .dashboard-layout { display: flex; gap: 20px; align-items: flex-start; }
@@ -278,9 +282,6 @@ button, input, select, textarea { font-family: var(--sans); }
   .sidebar-user .role { display: none; }
 
   .main-area { padding: 16px; }
-
-  .kpi-row { display: flex; overflow-x: auto; gap: 10px; padding-bottom: 4px; }
-  .kpi-card { min-width: 130px; flex-shrink: 0; }
 
   .dashboard-layout { flex-direction: column; }
   .side-rail { width: 100%; position: static; }

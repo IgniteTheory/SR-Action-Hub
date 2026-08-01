@@ -29,16 +29,17 @@ export default function Toolbar({ search, onSearchChange, filter, onFilterChange
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
       />
-      <select
-        className="filter-select"
-        value={filter ?? ''}
-        onChange={(e) => onFilterChange(e.target.value || null)}
-      >
-        <option value="">All actions</option>
+      <div className="filter-chips">
         {FILTERS.map((f) => (
-          <option key={f.key} value={f.key}>{f.label}</option>
+          <button
+            key={f.key}
+            className={filter === f.key ? 'active' : ''}
+            onClick={() => onFilterChange(filter === f.key ? null : f.key)}
+          >
+            {f.label}
+          </button>
         ))}
-      </select>
+      </div>
     </div>
   );
 }
