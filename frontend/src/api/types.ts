@@ -75,6 +75,14 @@ export interface ActionSubtask {
   createdAt: string;
 }
 
+export interface ActionNote {
+  id: number;
+  actionId: number;
+  text: string;
+  createdBy: UserSummary;
+  createdAt: string;
+}
+
 export interface Action {
   id: number;
   ticketNumber: string;
@@ -122,6 +130,7 @@ export interface Action {
   linkedAction?: { id: number; status: ActionStatus; assignedTo: UserSummary | null } | null;
   statusHistory?: StatusHistoryEntry[];
   subtasks: ActionSubtask[];
+  notes: ActionNote[];
 }
 
 export interface DashboardKpis {

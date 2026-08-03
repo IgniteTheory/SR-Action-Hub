@@ -26,6 +26,7 @@ const actionInclude = {
   assignedTo: { select: userSummarySelect },
   createdBy: { select: userSummarySelect },
   subtasks: { orderBy: { id: 'asc' } },
+  notes: { include: { createdBy: { select: userSummarySelect } }, orderBy: { createdAt: 'asc' } },
   linkedAction: {
     select: { id: true, status: true, assignedTo: { select: userSummarySelect } }
   }
@@ -735,6 +736,29 @@ router.post('/:id/request-quote', requireAuth, async (req, res) => {
   });
 
   res.json({ action });
+});
+
+/* ---------- notes ---------- */
+
+const noteSchema = z.object({ text: z.string().min(1) });
+
+router.post('/:id/notes', requireAuth, async (req, res) => {
+  const actionId = Number(req.params.id);
+  const parsed = noteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'text is required' });
+    return;
+  }
+  const existing = await prisma.action.findFirst({ where: { id: actionId, deletedAt: null } });
+  if (!existing) {
+    res.status(404).json({ error: 'Action not found' });
+    return;
+  }
+  await prisma.actionNote.create({
+    data: { actionId, text: parsed.data.text, createdById: req.user!.id }
+  });
+  const action = await prisma.action.findUnique({ where: { id: actionId }, include: actionInclude });
+  res.status(201).json({ action });
 });
 
 /* ---------- sub-tasks ---------- */
