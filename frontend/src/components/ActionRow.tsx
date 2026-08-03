@@ -22,7 +22,6 @@ export default function ActionRow({ action: a, onSelect, onStatusChange, onAddNo
 
   const now = Date.now();
   const needsManualQuote = a.quoteStatus === 'NEEDS_MANUAL_QUOTE';
-  const overdue = new Date(a.dueAt).getTime() < now && a.status !== 'COMPLETED' && a.status !== 'CANCELLED';
   const fourDaysMs = 4 * 24 * 60 * 60 * 1000;
   const stale = a.status !== 'COMPLETED' && a.status !== 'CANCELLED' && now - new Date(a.updatedAt).getTime() > fourDaysMs;
 
@@ -37,7 +36,6 @@ export default function ActionRow({ action: a, onSelect, onStatusChange, onAddNo
     <div className={`action-row${needsManualQuote ? ' quote-flag' : ''}`} onClick={() => onSelect(a)}>
       <div className="main-info">
         <div className="client">{a.client.name}{stale && <span className="stale-badge" title="No updates in 4+ days">⏰ Stale</span>}</div>
-        <div className="desc">{a.description}</div>
       </div>
 
       <div className="field-col" onClick={(e) => e.stopPropagation()}>
@@ -68,11 +66,6 @@ export default function ActionRow({ action: a, onSelect, onStatusChange, onAddNo
       <div className="field-col">
         <div className="field-label">Turnaround</div>
         <div className="field-value">{TURNAROUND_LABELS[a.turnaround]}</div>
-      </div>
-
-      <div className="field-col">
-        <div className="field-label">Due</div>
-        <div className={`field-value${overdue ? ' overdue' : ''}`}>{formatDateTime(a.dueAt)}</div>
       </div>
 
       <div className="notes-col" onClick={(e) => e.stopPropagation()}>

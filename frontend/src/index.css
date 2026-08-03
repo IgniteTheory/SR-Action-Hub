@@ -161,7 +161,7 @@ button, input, select, textarea { font-family: var(--sans); }
 .action-list { display: flex; flex-direction: column; gap: 8px; }
 .action-row {
   display: grid;
-  grid-template-columns: 1fr 122px 95px 88px 88px 108px auto;
+  grid-template-columns: 1fr 150px 130px 110px 110px auto;
   align-items: center;
   gap: 10px;
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -170,7 +170,6 @@ button, input, select, textarea { font-family: var(--sans); }
 .action-row:hover { border-color: var(--green); }
 .action-row.quote-flag { border-left: 4px solid var(--red); }
 .action-row .main-info .client { font-weight: 700; font-size: 13.5px; }
-.action-row .main-info .desc { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .empty-state { color: var(--text-muted); text-align: center; padding: 40px; }
 
 /* Clean label-over-value columns: Progress / Allocated To / Requested / Turnaround / Due */
