@@ -89,6 +89,7 @@ model User {
   assignedActions   Action[]        @relation("AssignedTo")
   statusChanges     StatusHistory[]
   accountantClients Client[]        @relation("AssignedAccountant")
+  actionNotes       ActionNote[]
 
   @@map("users")
 }
@@ -213,6 +214,7 @@ model Action {
 
   statusHistory StatusHistory[]
   subtasks      ActionSubtask[]
+  notes         ActionNote[]
 
   @@map("actions")
 }
@@ -227,6 +229,19 @@ model ActionSubtask {
   action Action @relation(fields: [actionId], references: [id], onDelete: Cascade)
 
   @@map("action_subtasks")
+}
+
+model ActionNote {
+  id          Int      @id @default(autoincrement())
+  actionId    Int
+  text        String
+  createdById Int
+  createdAt   DateTime @default(now())
+
+  action    Action @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  createdBy User   @relation(fields: [createdById], references: [id])
+
+  @@map("action_notes")
 }
 
 model StatusHistory {

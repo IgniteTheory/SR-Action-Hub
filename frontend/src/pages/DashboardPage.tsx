@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
-import type { Action, DashboardKpis, RequestType, UserSummary } from '../api/types';
+import type { Action, ActionStatus, DashboardKpis, RequestType, UserSummary } from '../api/types';
 import KpiCards from '../components/KpiCards';
 import StaffTabs from '../components/StaffTabs';
 import Toolbar from '../components/Toolbar';
@@ -84,6 +84,16 @@ export default function DashboardPage() {
     setSelectedAction(res.action);
   }
 
+  async function changeStatus(actionId: number, status: ActionStatus) {
+    await api.post(`/actions/${actionId}/status`, { status });
+    await refreshAll();
+  }
+
+  async function addNote(actionId: number, text: string) {
+    await api.post(`/actions/${actionId}/notes`, { text });
+    await refreshAll();
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -97,7 +107,7 @@ export default function DashboardPage() {
 
           <Toolbar search={search} onSearchChange={setSearch} filter={filter} onFilterChange={setFilter} />
 
-          <ActionList actions={actions} onSelect={openAction} />
+          <ActionList actions={actions} onSelect={openAction} onStatusChange={changeStatus} onAddNote={addNote} />
         </div>
 
         <div className="side-rail">
