@@ -3,9 +3,6 @@ import type { Action, ActionStatus } from '../api/types';
 import {
   formatDate,
   formatDateTime,
-  initials,
-  PRIORITY_LABELS,
-  QUOTE_STATUS_LABELS,
   STATUS_LABELS,
   TURNAROUND_LABELS,
 } from '../utils/format';
@@ -42,30 +39,9 @@ export default function ActionRow({ action: a, onSelect, onStatusChange, onAddNo
         <div className="client">{a.client.name}{stale && <span className="stale-badge" title="No updates in 4+ days">⏰ Stale</span>}</div>
         <div className="desc">{a.description}</div>
       </div>
-      <div>
-        <span className={`badge priority-${a.priority}`}>{PRIORITY_LABELS[a.priority]}</span>
-        {a.quoteStatus !== 'NOT_NEEDED' && (
-          <span className={`quote-badge ${a.quoteStatus}`}>{QUOTE_STATUS_LABELS[a.quoteStatus]}</span>
-        )}
-      </div>
-      <div className="assignee">
-        {a.assignedTo ? (
-          <>
-            <span className="avatar" style={{ background: a.assignedTo.colour, width: 20, height: 20, fontSize: 10 }}>
-              {initials(a.assignedTo.name)}
-            </span>
-            {a.assignedTo.name}
-          </>
-        ) : (
-          <span style={{ color: 'var(--text-muted)' }}>Unallocated</span>
-        )}
-      </div>
-      <div className="meta">
-        <div>Req: {formatDate(a.createdAt)}</div>
-        <div>{TURNAROUND_LABELS[a.turnaround]}</div>
-      </div>
-      <div className={`due${overdue ? ' overdue' : ''}`}>{formatDateTime(a.dueAt)}</div>
-      <div className="status-notes" onClick={(e) => e.stopPropagation()}>
+
+      <div className="field-col" onClick={(e) => e.stopPropagation()}>
+        <div className="field-label">Progress</div>
         <select
           className={`status-pill status-select ${a.status}`}
           value={a.status}
@@ -77,12 +53,35 @@ export default function ActionRow({ action: a, onSelect, onStatusChange, onAddNo
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="field-col">
+        <div className="field-label">Allocated To</div>
+        <div className="field-value">{a.assignedTo ? a.assignedTo.name : 'Unallocated'}</div>
+      </div>
+
+      <div className="field-col">
+        <div className="field-label">Requested</div>
+        <div className="field-value">{formatDate(a.createdAt)}</div>
+      </div>
+
+      <div className="field-col">
+        <div className="field-label">Turnaround</div>
+        <div className="field-value">{TURNAROUND_LABELS[a.turnaround]}</div>
+      </div>
+
+      <div className="field-col">
+        <div className="field-label">Due</div>
+        <div className={`field-value${overdue ? ' overdue' : ''}`}>{formatDateTime(a.dueAt)}</div>
+      </div>
+
+      <div className="notes-col" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           className={`notes-toggle${a.notes.length ? ' has-notes' : ''}`}
           onClick={() => setNotesOpen((open) => !open)}
         >
-          Notes ({a.notes.length})
+          Notes ({a.notes.length}) {notesOpen ? '▲' : '▼'}
         </button>
       </div>
 
