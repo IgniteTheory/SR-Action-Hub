@@ -1,63 +1,13 @@
-import nodemailer from 'nodemailer';
-import dns from 'dns';
+import { graphMailIsConfigured, sendMailViaGraph } from './graphMail';
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-    promise.then(
-      (v) => { clearTimeout(timer); resolve(v); },
-      (e) => { clearTimeout(timer); reject(e); }
-    );
-  });
-}
-
-// nodemailer resolves both A and AAAA records for the SMTP host and then
-// picks a RANDOM address from the combined list to connect to (see
-// formatDNSValue in nodemailer/lib/shared) rather than always preferring
-// IPv4. Render's containers don't have a working IPv6 route out, so
-// whenever it randomly picks one of Office 365's AAAA addresses the
-// connection fails with ENETUNREACH. We resolve the A record ourselves —
-// via dns.lookup(), the same OS-level resolution every other outbound
-// connection in this app already relies on, rather than nodemailer's
-// dns.resolve4()/resolve6() (a separate raw-DNS code path that isn't
-// guaranteed to work the same way inside a hosting platform's network) —
-// and connect to that IP literal (with servername set for correct
-// TLS/SNI) so nodemailer never gets a chance to pick an IPv6 address.
-// Bounded with a timeout so a slow/broken resolution can never hang the
-// request that triggered the email (e.g. ticket creation) — a failure
-// here should only ever cost this one email, recorded as an error.
-let cachedIp: { host: string; address: string; expires: number } | null = null;
-
-async function resolveIPv4(host: string): Promise<string> {
-  if (cachedIp && cachedIp.host === host && cachedIp.expires > Date.now()) {
-    return cachedIp.address;
-  }
-  const { address } = await withTimeout(dns.promises.lookup(host, { family: 4 }), 4000, 'DNS lookup');
-  cachedIp = { host, address, expires: Date.now() + 5 * 60 * 1000 };
-  return address;
-}
-
-async function getTransporter() {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return null;
-  const host = process.env.SMTP_HOST || 'smtp.office365.com';
-  const ip = await resolveIPv4(host);
-  return nodemailer.createTransport({
-    host: ip,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: false, // STARTTLS on 587, standard for Outlook/Office 365
-    tls: { servername: host }, // keep TLS validating against the real hostname, not the IP
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
-}
+// Outbound email now goes through Microsoft Graph (sendMail as the fixed
+// ticketing@sraccounting.co.za shared mailbox — see graphMail.ts), replacing
+// the previous Office 365 SMTP/app-password integration. This file's job is
+// unchanged: build the three transactional email bodies and hand them to a
+// single send() call, so callers in actions.ts need no changes.
 
 export function emailIsConfigured(): boolean {
-  return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+  return graphMailIsConfigured();
 }
 
 function escapeHtml(str: string): string {
@@ -77,19 +27,21 @@ interface SendArgs {
 
 // Throws on failure — callers should catch and record the error rather than
 // let a mail hiccup break the request that triggered it.
+//
+// `text` is accepted for call-site compatibility with the existing template
+// functions below but is not sent separately: Graph's sendMail takes a
+// single body content type per message, so the HTML body is what's sent
+// (matching what most email clients render anyway). This is a minor
+// behavior change from the old SMTP path, which sent a true
+// multipart/alternative text+HTML message.
 async function send(args: SendArgs): Promise<void> {
-  const t = await getTransporter();
-  if (!t) {
-    throw new Error('Email is not configured yet (SMTP_USER / SMTP_PASS not set).');
+  if (!graphMailIsConfigured()) {
+    throw new Error(
+      'Email is not configured yet (MS_TENANT_ID / MS_CLIENT_ID / MS_SHARED_MAILBOX / ' +
+        'MS_CERTIFICATE_THUMBPRINT / MS_CERTIFICATE_PRIVATE_KEY_PATH not all set).'
+    );
   }
-  const fromName = process.env.SMTP_FROM_NAME || 'SR Accounting';
-  await t.sendMail({
-    from: `"${fromName}" <${process.env.SMTP_USER}>`,
-    to: args.to,
-    subject: args.subject,
-    text: args.text,
-    html: args.html
-  });
+  await sendMailViaGraph({ to: args.to, subject: args.subject, html: args.html });
 }
 
 interface CompletionEmailInput {
@@ -100,7 +52,7 @@ interface CompletionEmailInput {
 }
 
 export async function sendCompletionEmail(input: CompletionEmailInput): Promise<void> {
-  const fromName = process.env.SMTP_FROM_NAME || 'SR Accounting';
+  const fromName = process.env.MAIL_FROM_NAME || 'SR Accounting';
   await send({
     to: input.contactEmail,
     subject: `Your request has been completed — ${input.ticketNumber}`,
@@ -130,7 +82,7 @@ interface AcknowledgementEmailInput {
 }
 
 export async function sendAcknowledgementEmail(input: AcknowledgementEmailInput): Promise<void> {
-  const fromName = process.env.SMTP_FROM_NAME || 'SR Accounting';
+  const fromName = process.env.MAIL_FROM_NAME || 'SR Accounting';
   await send({
     to: input.contactEmail,
     subject: `We've received your request — ${input.ticketNumber}`,
@@ -163,7 +115,7 @@ interface QuoteEmailInput {
 }
 
 export async function sendQuoteEmail(input: QuoteEmailInput): Promise<void> {
-  const fromName = process.env.SMTP_FROM_NAME || 'SR Accounting';
+  const fromName = process.env.MAIL_FROM_NAME || 'SR Accounting';
   const amountLine = input.quoteAmount ? `Quoted amount: ${input.quoteAmount}\n` : '';
   const amountHtml = input.quoteAmount ? `<p><b>Quoted amount:</b> ${escapeHtml(input.quoteAmount)}</p>` : '';
 

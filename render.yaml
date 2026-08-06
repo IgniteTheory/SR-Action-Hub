@@ -18,16 +18,23 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
-      # Completion emails via Outlook/Microsoft 365 SMTP. Set these manually
-      # in the Render dashboard once you have a mailbox + app password —
-      # nothing sends until SMTP_USER/SMTP_PASS are filled in.
-      - key: SMTP_HOST
-        value: smtp.office365.com
-      - key: SMTP_PORT
-        value: "587"
-      - key: SMTP_USER
+      # Ticket emails via Microsoft Graph, sent/read as the fixed
+      # ticketing@sraccounting.co.za shared mailbox — see README.md
+      # "Email via Microsoft Graph". Certificate-based app-only auth only.
+      # The four MS_* identifiers below are non-secret and can be set from
+      # GRAPH_CONFIGURATION.md; nothing sends until they're all filled in.
+      - key: MS_TENANT_ID
         sync: false
-      - key: SMTP_PASS
+      - key: MS_CLIENT_ID
         sync: false
-      - key: SMTP_FROM_NAME
+      - key: MS_SHARED_MAILBOX
+        value: ticketing@sraccounting.co.za
+      - key: MS_CERTIFICATE_THUMBPRINT
+        sync: false
+      # The private key itself is never a plain env var. Upload it as a
+      # Render "Secret File" (Dashboard → this service → Environment →
+      # Secret Files), then set this to whatever path Render mounts it at.
+      - key: MS_CERTIFICATE_PRIVATE_KEY_PATH
+        sync: false
+      - key: MAIL_FROM_NAME
         value: SR Accounting
