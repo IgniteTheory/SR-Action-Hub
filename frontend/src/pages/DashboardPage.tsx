@@ -19,7 +19,6 @@ export default function DashboardPage() {
   const [completedActions, setCompletedActions] = useState<Action[]>([]);
   const [workingOnActions, setWorkingOnActions] = useState<Action[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [selectedAction, setSelectedAction] = useState<Action | null>(null);
@@ -28,12 +27,8 @@ export default function DashboardPage() {
   const toggleUser = (id: number) => {
     setSelectedUserIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
-  const toggleFilter = (key: string) => {
-    setSelectedFilters((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
-  };
   const clearAll = () => {
     setSelectedUserIds([]);
-    setSelectedFilters([]);
   };
 
   const loadStatic = useCallback(async () => {
@@ -55,11 +50,10 @@ export default function DashboardPage() {
   const loadActions = useCallback(async () => {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
-    if (selectedFilters.length) params.set('filters', selectedFilters.join(','));
     if (selectedUserIds.length) params.set('assignedToIds', selectedUserIds.join(','));
     const res = await api.get<{ actions: Action[] }>(`/actions?${params.toString()}`);
     setActions(res.actions);
-  }, [search, selectedFilters, selectedUserIds]);
+  }, [search, selectedUserIds]);
 
   const loadCompleted = useCallback(async () => {
     const params = new URLSearchParams({ status: 'COMPLETED' });
@@ -132,8 +126,6 @@ export default function DashboardPage() {
             users={users}
             selectedUserIds={selectedUserIds}
             onToggleUser={toggleUser}
-            selectedFilters={selectedFilters}
-            onToggleFilter={toggleFilter}
             onClearAll={clearAll}
           />
 

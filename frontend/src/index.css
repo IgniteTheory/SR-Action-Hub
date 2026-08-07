@@ -116,16 +116,23 @@ button, input, select, textarea { font-family: var(--sans); }
   font-size: 13.5px; background: #fff;
 }
 
-/* Combined staff + status/urgency filter bar — every chip is independently
-   toggleable and multiple can be active at once (AND-combined). */
-.filter-bar { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
 .filter-chip {
   border: 1px solid var(--border); background: #fff; padding: 6px 13px; border-radius: 16px;
   font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--text-muted);
 }
 .filter-chip.active { background: var(--green); color: #fff; border-color: var(--green); }
 .filter-chip.all-chip.active { background: var(--green-dark); border-color: var(--green-dark); }
-.filter-divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+/* Collapsible dropdown sections (staff picker, KPI overview) — same
+   expand/collapse pattern used throughout the side rail. */
+.dropdown-section { margin-bottom: 14px; }
+.dropdown-section-toggle {
+  display: flex; justify-content: space-between; align-items: center; width: 100%;
+  border: 1px solid var(--border); background: var(--card); border-radius: var(--radius);
+  padding: 9px 13px; cursor: pointer; box-shadow: var(--shadow);
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; color: var(--text-muted);
+}
+.dropdown-section-body { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
 
 /* Dashboard layout + side rail (Working On / Completed) */
 .dashboard-layout { display: flex; gap: 20px; align-items: flex-start; }
