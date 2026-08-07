@@ -35,6 +35,8 @@ export interface Client {
   id: number;
   name: string;
   notes: string | null;
+  grading: string | null;
+  director1: string | null;
   assignedAccountantId: number | null;
   assignedAccountant?: UserSummary | null;
   contacts?: Contact[];

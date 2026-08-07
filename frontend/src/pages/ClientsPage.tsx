@@ -26,12 +26,12 @@ export default function ClientsPage() {
     return () => clearTimeout(handle);
   }, [search]);
 
-  async function setAccountant(clientId: number, accountantId: number | null) {
+  async function saveField(clientId: number, patch: Partial<Pick<Client, 'assignedAccountantId' | 'grading' | 'director1'>>) {
     setSavingId(clientId);
     setError(null);
-    setClients((prev) => prev.map((c) => (c.id === clientId ? { ...c, assignedAccountantId: accountantId } : c)));
+    setClients((prev) => prev.map((c) => (c.id === clientId ? { ...c, ...patch } : c)));
     try {
-      const res = await api.patch<{ client: Client }>(`/clients/${clientId}`, { assignedAccountantId: accountantId });
+      const res = await api.patch<{ client: Client }>(`/clients/${clientId}`, patch);
       setClients((prev) => prev.map((c) => (c.id === clientId ? res.client : c)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to update');
@@ -47,7 +47,8 @@ export default function ClientsPage() {
       </div>
       <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 640, marginTop: -8 }}>
         Set each client's usual accountant here — new tickets for that client auto-assign to them, and any ticket
-        that needs a quote still goes to Stephan first, with a duplicate ticket sent to this accountant.
+        that needs a quote still goes to Stephan first, with a duplicate ticket sent to this accountant. Grading and
+        Director are free-text reference fields.
       </p>
 
       {error && <div className="error-text">{error}</div>}
@@ -66,14 +67,40 @@ export default function ClientsPage() {
         <div className="empty-state">No clients match.</div>
       ) : (
         <div className="action-list">
+          <div className="action-row" style={{ gridTemplateColumns: '1fr 90px 160px 220px', cursor: 'default', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--text-muted)' }}>
+            <div>Customer</div>
+            <div>Grading</div>
+            <div>Director</div>
+            <div>Allocation</div>
+          </div>
           {clients.map((c) => (
-            <div key={c.id} className="action-row" style={{ gridTemplateColumns: '1fr 260px', cursor: 'default' }}>
+            <div key={c.id} className="action-row" style={{ gridTemplateColumns: '1fr 90px 160px 220px', cursor: 'default' }}>
               <div className="main-info"><div className="client">{c.name}</div></div>
+              <div className="field" style={{ margin: 0 }}>
+                <input
+                  value={c.grading ?? ''}
+                  disabled={savingId === c.id}
+                  onChange={(e) => setClients((prev) => prev.map((x) => (x.id === c.id ? { ...x, grading: e.target.value } : x)))}
+                  onBlur={(e) => saveField(c.id, { grading: e.target.value || null })}
+                  placeholder="—"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <input
+                  value={c.director1 ?? ''}
+                  disabled={savingId === c.id}
+                  onChange={(e) => setClients((prev) => prev.map((x) => (x.id === c.id ? { ...x, director1: e.target.value } : x)))}
+                  onBlur={(e) => saveField(c.id, { director1: e.target.value || null })}
+                  placeholder="—"
+                  style={{ width: '100%' }}
+                />
+              </div>
               <div className="field" style={{ margin: 0 }}>
                 <select
                   value={c.assignedAccountantId ?? ''}
                   disabled={savingId === c.id}
-                  onChange={(e) => setAccountant(c.id, e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => saveField(c.id, { assignedAccountantId: e.target.value ? Number(e.target.value) : null })}
                 >
                   <option value="">Unassigned</option>
                   {users.map((u) => (

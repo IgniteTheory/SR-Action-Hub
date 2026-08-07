@@ -46,12 +46,15 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 const updateSchema = z.object({
-  assignedAccountantId: z.number().nullable().optional()
+  assignedAccountantId: z.number().nullable().optional(),
+  grading: z.string().nullable().optional(),
+  director1: z.string().nullable().optional()
 });
 
 // Chanel (admin) uses this to set each client's usual accountant — new
 // tickets for that client auto-assign to them, and it's who the duplicate
-// ticket goes to when a request needs a quote.
+// ticket goes to when a request needs a quote. Also used to set/edit the
+// client's grading and director on the Clients page.
 router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const parsed = updateSchema.safeParse(req.body);

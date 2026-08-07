@@ -104,6 +104,8 @@ model Client {
   taxNr                String?
   payeNr               String?
   notes                String?
+  grading              String?
+  director1            String?
   assignedAccountantId Int?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
