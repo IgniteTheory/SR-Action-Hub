@@ -109,26 +109,23 @@ button, input, select, textarea { font-family: var(--sans); }
 .kpi-mini.approval .value { color: #7c3aed; }
 .kpi-mini.stale .value { color: var(--amber); }
 
-/* Staff tabs */
-.staff-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
-.staff-tabs button {
-  border: 1px solid var(--border); background: #fff; padding: 7px 14px; border-radius: 20px;
-  font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-muted);
-}
-.staff-tabs button.active { background: var(--green-dark); color: #fff; border-color: var(--green-dark); }
-
-/* Search + filters */
-.toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+/* Search */
+.toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
 .search-input {
   flex: 1; min-width: 220px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
   font-size: 13.5px; background: #fff;
 }
-.filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.filter-chips button {
-  border: 1px solid var(--border); background: #fff; padding: 6px 12px; border-radius: 16px;
+
+/* Combined staff + status/urgency filter bar — every chip is independently
+   toggleable and multiple can be active at once (AND-combined). */
+.filter-bar { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.filter-chip {
+  border: 1px solid var(--border); background: #fff; padding: 6px 13px; border-radius: 16px;
   font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--text-muted);
 }
-.filter-chips button.active { background: var(--green); color: #fff; border-color: var(--green); }
+.filter-chip.active { background: var(--green); color: #fff; border-color: var(--green); }
+.filter-chip.all-chip.active { background: var(--green-dark); border-color: var(--green-dark); }
+.filter-divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
 
 /* Dashboard layout + side rail (Working On / Completed) */
 .dashboard-layout { display: flex; gap: 20px; align-items: flex-start; }
@@ -142,10 +139,17 @@ button, input, select, textarea { font-family: var(--sans); }
   border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow);
   max-height: 320px; overflow-y: auto;
 }
-.working-on-panel h2, .completed-rail h2 {
+.working-on-panel h2 {
   font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin: 0 0 10px;
 }
-.completed-empty { color: var(--text-muted); font-size: 12.5px; }
+.completed-rail { max-height: none; }
+.completed-rail-toggle {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; color: var(--text-muted);
+}
+.completed-rail .completed-list { margin-top: 10px; max-height: 280px; overflow-y: auto; }
+.completed-empty { color: var(--text-muted); font-size: 12.5px; margin-top: 10px; }
 .completed-list { display: flex; flex-direction: column; gap: 4px; }
 .completed-row { padding: 8px 9px; border-radius: 7px; cursor: pointer; }
 .completed-row:hover { background: #f0f2f1; }
@@ -157,8 +161,69 @@ button, input, select, textarea { font-family: var(--sans); }
 .completed-rail .completed-row .client, .completed-rail .completed-row .meta { text-decoration: line-through; }
 .completed-rail .completed-row .client { color: var(--text-muted); }
 
-/* Action list */
-.action-list { display: flex; flex-direction: column; gap: 8px; }
+/* Action table — spreadsheet-style, one shared header row, frozen while
+   scrolling the body (position: sticky within the bounded-height wrap). */
+.action-table-wrap {
+  max-height: 70vh;
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  background: var(--card);
+}
+.action-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.action-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.action-table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--text);
+  font-weight: 600;
+}
+.action-table tbody tr.action-tr { cursor: pointer; }
+.action-table tbody tr.action-tr:hover td { background: var(--bg); }
+.action-table tbody tr.action-tr.quote-flag td:first-child { box-shadow: inset 4px 0 0 var(--red); }
+.action-table tbody tr:last-child td { border-bottom: none; }
+.action-table .client-cell { font-weight: 700; font-size: 13.5px; color: var(--text); }
+
+.notes-tr td { background: var(--bg); padding: 0 14px 14px; border-bottom: 1px solid var(--border); }
+.notes-panel { cursor: default; padding-top: 10px; }
+.notes-empty { color: var(--text-muted); font-size: 12px; }
+.note-add { display: flex; gap: 6px; margin-top: 8px; }
+.note-add input { flex: 1; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; }
+
+select.status-select {
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-overflow: ellipsis;
+}
+select.status-select:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+
+.notes-toggle {
+  border: 1px solid var(--border); background: #fff; border-radius: 14px; padding: 4px 10px;
+  font-size: 11.5px; font-weight: 600; color: var(--text-muted); cursor: pointer; white-space: nowrap;
+}
+.notes-toggle:hover { background: #f0f2f1; }
+.notes-toggle.has-notes { color: var(--green-dark); border-color: var(--green); }
+
+/* Unrelated to the table above — still used by ClientsPage/RequestTypesPage's
+   own simple list rows, which supply their own grid-template-columns inline. */
 .action-row {
   display: grid;
   grid-template-columns: 1fr 150px 130px 110px 110px auto;
@@ -171,42 +236,6 @@ button, input, select, textarea { font-family: var(--sans); }
 .action-row.quote-flag { border-left: 4px solid var(--red); }
 .action-row .main-info .client { font-weight: 700; font-size: 13.5px; }
 .empty-state { color: var(--text-muted); text-align: center; padding: 40px; }
-
-/* Clean label-over-value columns: Progress / Allocated To / Requested / Turnaround / Due */
-.field-col { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.field-label {
-  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--text-muted);
-}
-.field-value { font-size: 12.5px; font-weight: 600; color: var(--text); }
-.field-value.overdue { color: var(--red); font-weight: 700; }
-
-select.status-select {
-  border: none;
-  cursor: pointer;
-  width: 100%;
-  text-overflow: ellipsis;
-}
-select.status-select:focus { outline: 2px solid var(--green); outline-offset: 1px; }
-
-.notes-col { display: flex; justify-content: flex-end; }
-.notes-toggle {
-  border: 1px solid var(--border); background: #fff; border-radius: 14px; padding: 4px 10px;
-  font-size: 11.5px; font-weight: 600; color: var(--text-muted); cursor: pointer; white-space: nowrap;
-}
-.notes-toggle:hover { background: #f0f2f1; }
-.notes-toggle.has-notes { color: var(--green-dark); border-color: var(--green); }
-
-.notes-panel {
-  grid-column: 1 / -1;
-  cursor: default;
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
-  padding-top: 10px;
-}
-.notes-empty { color: var(--text-muted); font-size: 12px; }
-.note-add { display: flex; gap: 6px; margin-top: 8px; }
-.note-add input { flex: 1; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; }
 
 .badge {
   display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px;
@@ -317,8 +346,26 @@ select.status-select:focus { outline: 2px solid var(--green); outline-offset: 1p
 
   .dashboard-layout { flex-direction: column; }
   .side-rail { width: 100%; position: static; }
-  .working-on-panel, .completed-rail { max-height: 220px; }
+  .working-on-panel { max-height: 220px; }
 
   .action-row { display: flex; flex-wrap: wrap; row-gap: 6px; }
   .action-row .main-info { width: 100%; order: -1; }
 }
+
+/* Toast (status-change confirmations and errors) */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  z-index: 500;
+}
+.toast-success { background: var(--green-dark); }
+.toast-error { background: var(--red); }

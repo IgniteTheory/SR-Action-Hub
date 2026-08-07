@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import type { Action, ActionStatus, DashboardKpis, RequestType, UserSummary } from '../api/types';
 import KpiCards from '../components/KpiCards';
-import StaffTabs from '../components/StaffTabs';
+import FilterBar from '../components/FilterBar';
 import Toolbar from '../components/Toolbar';
 import ActionList from '../components/ActionList';
 import CompletedRail from '../components/CompletedRail';
 import WorkingOnPanel from '../components/WorkingOnPanel';
 import CreateActionDrawer from '../components/CreateActionDrawer';
 import ActionDetailDrawer from '../components/ActionDetailDrawer';
+import Toast from '../components/Toast';
 
 export default function DashboardPage() {
   const [users, setUsers] = useState<UserSummary[]>([]);
@@ -17,11 +18,23 @@ export default function DashboardPage() {
   const [actions, setActions] = useState<Action[]>([]);
   const [completedActions, setCompletedActions] = useState<Action[]>([]);
   const [workingOnActions, setWorkingOnActions] = useState<Action[]>([]);
-  const [staffFilter, setStaffFilter] = useState<number | 'all'>('all');
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedAction, setSelectedAction] = useState<Action | null>(null);
+  const [toast, setToast] = useState<{ message: string; variant: 'success' | 'error' } | null>(null);
+
+  const toggleUser = (id: number) => {
+    setSelectedUserIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+  const toggleFilter = (key: string) => {
+    setSelectedFilters((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
+  };
+  const clearAll = () => {
+    setSelectedUserIds([]);
+    setSelectedFilters([]);
+  };
 
   const loadStatic = useCallback(async () => {
     const [u, rt] = await Promise.all([
@@ -33,36 +46,37 @@ export default function DashboardPage() {
   }, []);
 
   const loadKpis = useCallback(async () => {
-    const q = staffFilter !== 'all' ? `?assignedToId=${staffFilter}` : '';
-    const res = await api.get<DashboardKpis>(`/dashboard/kpis${q}`);
+    const params = new URLSearchParams();
+    if (selectedUserIds.length) params.set('assignedToIds', selectedUserIds.join(','));
+    const res = await api.get<DashboardKpis>(`/dashboard/kpis?${params.toString()}`);
     setKpis(res);
-  }, [staffFilter]);
+  }, [selectedUserIds]);
 
   const loadActions = useCallback(async () => {
     const params = new URLSearchParams();
     if (search) params.set('search', search);
-    if (filter) params.set('filter', filter);
-    if (staffFilter !== 'all') params.set('assignedToId', String(staffFilter));
+    if (selectedFilters.length) params.set('filters', selectedFilters.join(','));
+    if (selectedUserIds.length) params.set('assignedToIds', selectedUserIds.join(','));
     const res = await api.get<{ actions: Action[] }>(`/actions?${params.toString()}`);
     setActions(res.actions);
-  }, [search, filter, staffFilter]);
+  }, [search, selectedFilters, selectedUserIds]);
 
   const loadCompleted = useCallback(async () => {
-    const params = new URLSearchParams({ filter: 'completed' });
-    if (staffFilter !== 'all') params.set('assignedToId', String(staffFilter));
+    const params = new URLSearchParams({ status: 'COMPLETED' });
+    if (selectedUserIds.length) params.set('assignedToIds', selectedUserIds.join(','));
     const res = await api.get<{ actions: Action[] }>(`/actions?${params.toString()}`);
     setCompletedActions(res.actions);
-  }, [staffFilter]);
+  }, [selectedUserIds]);
 
   const loadWorkingOn = useCallback(async () => {
     const params = new URLSearchParams({ status: 'IN_PROGRESS' });
-    if (staffFilter !== 'all') params.set('assignedToId', String(staffFilter));
+    if (selectedUserIds.length) params.set('assignedToIds', selectedUserIds.join(','));
     const res = await api.get<{ actions: Action[] }>(`/actions?${params.toString()}`);
     const sorted = [...res.actions].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     );
     setWorkingOnActions(sorted);
-  }, [staffFilter]);
+  }, [selectedUserIds]);
 
   useEffect(() => {
     loadStatic();
@@ -85,7 +99,16 @@ export default function DashboardPage() {
   }
 
   async function changeStatus(actionId: number, status: ActionStatus) {
-    await api.post(`/actions/${actionId}/status`, { status });
+    try {
+      await api.post(`/actions/${actionId}/status`, { status });
+    } catch (err) {
+      setToast({ message: err instanceof ApiError ? err.message : 'Could not update status', variant: 'error' });
+      return;
+    }
+    if (status === 'COMPLETED') {
+      const completedTicket = actions.find((a) => a.id === actionId);
+      setToast({ message: `${completedTicket ? completedTicket.client.name : 'Ticket'} marked as completed`, variant: 'success' });
+    }
     await refreshAll();
   }
 
@@ -103,9 +126,16 @@ export default function DashboardPage() {
 
       <div className="dashboard-layout">
         <div className="dashboard-main">
-          <StaffTabs users={users} activeId={staffFilter} onChange={setStaffFilter} />
+          <Toolbar search={search} onSearchChange={setSearch} />
 
-          <Toolbar search={search} onSearchChange={setSearch} filter={filter} onFilterChange={setFilter} />
+          <FilterBar
+            users={users}
+            selectedUserIds={selectedUserIds}
+            onToggleUser={toggleUser}
+            selectedFilters={selectedFilters}
+            onToggleFilter={toggleFilter}
+            onClearAll={clearAll}
+          />
 
           <ActionList actions={actions} onSelect={openAction} onStatusChange={changeStatus} onAddNote={addNote} />
         </div>
@@ -142,6 +172,8 @@ export default function DashboardPage() {
           }}
         />
       )}
+
+      {toast && <Toast message={toast.message} variant={toast.variant} onDismiss={() => setToast(null)} />}
     </div>
   );
 }
