@@ -14,10 +14,24 @@ export default function ActionList({ actions, onSelect, onStatusChange, onAddNot
   }
 
   return (
-    <div className="action-list">
-      {actions.map((a) => (
-        <ActionRow key={a.id} action={a} onSelect={onSelect} onStatusChange={onStatusChange} onAddNote={onAddNote} />
-      ))}
+    <div className="action-table-wrap">
+      <table className="action-table">
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Progress</th>
+            <th>Allocated To</th>
+            <th>Requested</th>
+            <th>Turnaround</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {actions.map((a) => (
+            <ActionRow key={a.id} action={a} onSelect={onSelect} onStatusChange={onStatusChange} onAddNote={onAddNote} />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
