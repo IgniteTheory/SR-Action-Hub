@@ -323,6 +323,11 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
                   Responded {formatDateTime(action.quoteRespondedAt)}
                 </div>
               )}
+              <div style={{ marginTop: 8 }}>
+                <a className="btn btn-ghost btn-sm" href={`/api/actions/${action.id}/quote-pdf`} download>
+                  Download PDF
+                </a>
+              </div>
 
               {action.quoteStatus === 'NEEDS_MANUAL_QUOTE' && (
                 <div style={{ marginTop: 10 }}>
