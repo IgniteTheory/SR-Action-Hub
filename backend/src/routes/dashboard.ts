@@ -5,13 +5,17 @@ import { requireAuth } from '../middleware/auth';
 const router = Router();
 
 router.get('/kpis', requireAuth, async (req, res) => {
-  const assignedToId = req.query.assignedToId ? Number(req.query.assignedToId) : undefined;
+  const assignedToIds = String(req.query.assignedToIds ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map((s) => Number(s))
+    .filter((n) => Number.isInteger(n));
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
 
-  const baseWhere = { deletedAt: null, ...(assignedToId ? { assignedToId } : {}) };
+  const baseWhere = { deletedAt: null, ...(assignedToIds.length ? { assignedToId: { in: assignedToIds } } : {}) };
   const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
 
   const [overdue, dueToday, waiting, completedToday, newActions, approvalPending, stale, completedForAvg] = await Promise.all([

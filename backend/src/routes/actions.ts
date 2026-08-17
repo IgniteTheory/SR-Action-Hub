@@ -82,8 +82,54 @@ async function attemptSendQuoteEmail(action: ActionWithIncludes, req: Request): 
   }
 }
 
+// Every filter chip on the dashboard is independently toggleable and they
+// all combine with AND (e.g. "Stephan" + "Overdue" + "Quote Needed" at the
+// same time) — so each active filter key contributes its own entry to an
+// AND array instead of writing directly into `where`, which would let a
+// later filter silently overwrite an earlier one's condition on the same
+// field (e.g. two different filters both wanting to constrain `status`).
+function buildFilterCondition(key: string, now: Date, startOfToday: Date, endOfToday: Date): Prisma.ActionWhereInput | null {
+  switch (key) {
+    case 'today':
+      return { dueAt: { gte: startOfToday, lt: endOfToday } };
+    case 'urgent':
+      return { priority: { in: ['CRITICAL', 'HIGH'] } };
+    case 'overdue':
+      return { dueAt: { lt: now }, status: { notIn: ['COMPLETED', 'CANCELLED'] } };
+    case 'waiting':
+      return { status: { in: ['WAITING_CLIENT', 'WAITING_SARS', 'WAITING_BANK', 'WAITING_THIRD_PARTY'] } };
+    case 'snoozed':
+      return { status: 'SNOOZED' };
+    case 'unallocated':
+      return { assignedToId: null };
+    case 'quote-needed':
+      return { quoteStatus: 'NEEDS_MANUAL_QUOTE' };
+    case 'needs-internal-approval':
+      return { quoteStatus: 'NEEDS_INTERNAL_APPROVAL' };
+    case 'approval-pending':
+      return { quoteStatus: 'PENDING_APPROVAL' };
+    case 'stale': {
+      const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
+      return { status: { notIn: ['COMPLETED', 'CANCELLED'] }, updatedAt: { lt: fourDaysAgo } };
+    }
+    default:
+      return null;
+  }
+}
+
 router.get('/', requireAuth, async (req, res) => {
-  const { search, status, assignedToId, priority, filter } = req.query as Record<string, string | undefined>;
+  const { search, status, priority } = req.query as Record<string, string | undefined>;
+
+  // Multi-select, comma-separated: ?assignedToIds=1,3 and ?filters=overdue,quote-needed
+  const assignedToIds = String(req.query.assignedToIds ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map((s) => Number(s))
+    .filter((n) => Number.isInteger(n));
+  const activeFilters = String(req.query.filters ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const where: Prisma.ActionWhereInput = { deletedAt: null };
   const now = new Date();
@@ -93,7 +139,10 @@ router.get('/', requireAuth, async (req, res) => {
 
   if (status) where.status = status as Prisma.EnumActionStatusFilter['equals'];
   if (priority) where.priority = priority as Prisma.EnumPriorityFilter['equals'];
-  if (assignedToId) where.assignedToId = Number(assignedToId);
+  // Selecting several staff members at once is an OR within that one
+  // dimension ("Stephan's or Daniella's tickets"), which then ANDs with
+  // every other active filter via the `where.AND` array below.
+  if (assignedToIds.length) where.assignedToId = { in: assignedToIds };
 
   if (search) {
     where.OR = [
@@ -106,60 +155,23 @@ router.get('/', requireAuth, async (req, res) => {
     ];
   }
 
-  switch (filter) {
-    case 'mine':
-      where.assignedToId = req.user!.id;
-      break;
-    case 'today':
-      where.dueAt = { gte: startOfToday, lt: endOfToday };
-      break;
-    case 'urgent':
-      where.priority = { in: ['CRITICAL', 'HIGH'] };
-      break;
-    case 'overdue':
-      where.dueAt = { lt: now };
-      where.status = { notIn: ['COMPLETED', 'CANCELLED'] };
-      break;
-    case 'completed':
-      where.status = 'COMPLETED';
-      break;
-    case 'waiting':
-      where.status = { in: ['WAITING_CLIENT', 'WAITING_SARS', 'WAITING_BANK', 'WAITING_THIRD_PARTY'] };
-      break;
-    case 'snoozed':
-      where.status = 'SNOOZED';
-      break;
-    case 'unallocated':
-      where.assignedToId = null;
-      break;
-    case 'quote-needed':
-      where.quoteStatus = 'NEEDS_MANUAL_QUOTE';
-      break;
-    case 'needs-internal-approval':
-      where.quoteStatus = 'NEEDS_INTERNAL_APPROVAL';
-      break;
-    case 'approval-pending':
-      where.quoteStatus = 'PENDING_APPROVAL';
-      break;
-    case 'stale': {
-      const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
-      where.status = { notIn: ['COMPLETED', 'CANCELLED'] };
-      where.updatedAt = { lt: fourDaysAgo };
-      break;
-    }
+  const and: Prisma.ActionWhereInput[] = [];
+  for (const key of activeFilters) {
+    const condition = buildFilterCondition(key, now, startOfToday, endOfToday);
+    if (condition) and.push(condition);
   }
 
-  // Completed tickets move to the dedicated Completed list/tab — keep them
-  // out of every other view so the working list doesn't fill up with
-  // finished work, unless a view already targets a specific status itself.
-  if (filter !== 'completed' && where.status === undefined) {
-    where.status = { not: 'COMPLETED' };
-  }
+  // Completed tickets have their own dedicated view (fetched with an
+  // explicit ?status=COMPLETED) — keep them out of the main filterable
+  // table so it doesn't fill up with finished work.
+  if (!status) and.push({ status: { not: 'COMPLETED' } });
+
+  if (and.length) where.AND = and;
 
   const actions = await prisma.action.findMany({
     where,
     include: actionInclude,
-    orderBy: filter === 'completed' ? [{ completedAt: 'desc' }] : [{ dueAt: 'asc' }],
+    orderBy: status === 'COMPLETED' ? [{ completedAt: 'desc' }] : [{ dueAt: 'asc' }],
     take: 200
   });
 
