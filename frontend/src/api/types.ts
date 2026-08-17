@@ -114,6 +114,7 @@ export interface Action {
   acknowledgementEmailError: string | null;
   quoteStatus: QuoteStatus;
   quoteAmount: string | null;
+  quoteDescription: string | null;
   quoteToken: string | null;
   quoteRespondedAt: string | null;
   quoteEmailSentAt: string | null;

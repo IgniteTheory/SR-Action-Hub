@@ -199,7 +199,7 @@ router.get('/:id/quote-pdf', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const action = await prisma.action.findFirst({
     where: { id, deletedAt: null },
-    include: { client: true }
+    include: { client: true, requestType: true }
   });
   if (!action) {
     res.status(404).json({ error: 'Action not found' });
@@ -207,6 +207,10 @@ router.get('/:id/quote-pdf', requireAuth, async (req, res) => {
   }
   if (action.quoteStatus === 'NOT_NEEDED') {
     res.status(400).json({ error: 'This ticket has no quote to download' });
+    return;
+  }
+  if (!action.quoteDescription || action.quoteAmount == null) {
+    res.status(400).json({ error: 'Add a description of work and a price before downloading the quote' });
     return;
   }
   res.setHeader('Content-Type', 'application/pdf');
@@ -434,7 +438,9 @@ const updateSchema = z.object({
   priority: z.enum(['CRITICAL', 'HIGH', 'NORMAL', 'LOW']).optional(),
   assignedToId: z.number().nullable().optional(),
   addedToTimesheet: z.boolean().optional(),
-  quoteBilled: z.boolean().optional()
+  quoteBilled: z.boolean().optional(),
+  quoteDescription: z.string().nullable().optional(),
+  quoteAmount: z.number().nullable().optional()
 });
 
 router.patch('/:id', requireAuth, async (req, res) => {

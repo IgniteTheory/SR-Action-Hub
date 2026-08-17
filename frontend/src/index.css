@@ -133,6 +133,9 @@ button, input, select, textarea { font-family: var(--sans); }
   font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 700; color: var(--text-muted);
 }
 .dropdown-section-body { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+/* Inside the ticket detail drawer the dropdown holds stacked rows/text,
+   not a chip row — lay it out as a plain vertical block instead. */
+.drawer .dropdown-section-body { flex-direction: column; align-items: stretch; gap: 0; }
 
 /* Dashboard layout + side rail (Working On / Completed) */
 .dashboard-layout { display: flex; gap: 20px; align-items: flex-start; }
