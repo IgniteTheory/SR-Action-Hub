@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import type { Prisma } from '@prisma/client';
 
-type ActionForQuote = Prisma.ActionGetPayload<{ include: { client: true } }>;
+type ActionForQuote = Prisma.ActionGetPayload<{ include: { client: true; requestType: true } }>;
 
 function formatRand(amount: Prisma.Decimal | null): string {
   if (amount == null) return 'To be confirmed';
@@ -31,11 +31,12 @@ export function renderQuotePdf(action: ActionForQuote): PDFKit.PDFDocument {
   row('Date issued:', issued);
   row('Client:', action.client.name);
   row('Contact:', action.contactPerson);
+  row('Request type:', action.requestType.name);
   doc.moveDown(1);
 
   doc.font('Helvetica-Bold').fontSize(11).text('Description of work');
   doc.moveDown(0.3);
-  doc.font('Helvetica').fontSize(10.5).text(action.description, { width: 480 });
+  doc.font('Helvetica').fontSize(10.5).text(action.quoteDescription ?? '', { width: 480 });
   doc.moveDown(1.5);
 
   doc.font('Helvetica-Bold').fontSize(11).text('Quoted amount');

@@ -183,6 +183,10 @@ model Action {
 
   quoteStatus            QuoteStatus @default(NOT_NEEDED)
   quoteAmount             Decimal?   @db.Decimal(10, 2)
+  // Manually entered by staff — what the client is actually being quoted
+  // for. Kept separate from the ticket's own `description` (its origin/
+  // intake reason) since the two can diverge once a fee is worked out.
+  quoteDescription        String?
   quoteToken              String?    @unique
   quoteRespondedAt        DateTime?
   quoteEmailSentAt        DateTime?

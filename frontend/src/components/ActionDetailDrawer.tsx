@@ -36,11 +36,12 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [showSnooze, setShowSnooze] = useState(false);
   const [snoozeUntil, setSnoozeUntil] = useState('');
   const [snoozeReason, setSnoozeReason] = useState('Waiting for documents');
   const [quoteAmountInput, setQuoteAmountInput] = useState(action.quoteAmount ?? '');
-  const [quoteDueDateInput, setQuoteDueDateInput] = useState('');
+  const [quoteDescriptionInput, setQuoteDescriptionInput] = useState(action.quoteDescription ?? '');
   const [subtaskInput, setSubtaskInput] = useState('');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showAddQuote, setShowAddQuote] = useState(false);
@@ -116,10 +117,10 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
     run(() => api.post(`/actions/${action.id}/quote-status`, { quoteStatus, quoteAmount, dueDate }));
   }
 
-  function sendManualQuote() {
+  function saveQuoteDetails() {
     const amount = quoteAmountInput === '' ? null : Number(quoteAmountInput);
-    const dueDate = quoteDueDateInput ? new Date(quoteDueDateInput).toISOString() : null;
-    setQuoteStatus('PENDING_APPROVAL', amount, dueDate);
+    const description = quoteDescriptionInput.trim() || null;
+    run(() => api.patch(`/actions/${action.id}`, { quoteDescription: description, quoteAmount: amount }));
   }
 
   function approveQuote() {
@@ -218,6 +219,13 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
           </div>
         )}
 
+        <div className="dropdown-section">
+          <button type="button" className="dropdown-section-toggle" onClick={() => setDetailsOpen((o) => !o)}>
+            <span>Details</span>
+            <span>{detailsOpen ? '▾' : '▸'}</span>
+          </button>
+          {detailsOpen && (
+            <div className="dropdown-section-body">
         {!showEdit ? (
           <>
             <div className="detail-row"><span>Contact</span><b>{action.contactPerson}</b></div>
@@ -311,6 +319,9 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
           />
           <button className="btn btn-ghost btn-sm" onClick={addSubtask} disabled={busy || !subtaskInput.trim()}>Add</button>
         </div>
+            </div>
+          )}
+        </div>
 
         {action.quoteStatus !== 'NOT_NEEDED' && (
           <>
@@ -324,15 +335,29 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
                 </div>
               )}
               <div style={{ marginTop: 8 }}>
-                <a className="btn btn-ghost btn-sm" href={`/api/actions/${action.id}/quote-pdf`} download>
-                  Download PDF
-                </a>
+                {action.quoteDescription && action.quoteAmount ? (
+                  <a className="btn btn-ghost btn-sm" href={`/api/actions/${action.id}/quote-pdf`} download>
+                    Download PDF
+                  </a>
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    Add a description of work and a price below, then save, to enable the PDF download.
+                  </div>
+                )}
               </div>
 
               {action.quoteStatus === 'NEEDS_MANUAL_QUOTE' && (
                 <div style={{ marginTop: 10 }}>
                   <div className="field">
-                    <label>Quote amount (optional)</label>
+                    <label>Description of work to be done</label>
+                    <textarea
+                      value={quoteDescriptionInput}
+                      onChange={(e) => setQuoteDescriptionInput(e.target.value)}
+                      placeholder="What exactly will be delivered for this fee?"
+                    />
+                  </div>
+                  <div className="field">
+                    <label>Quote amount</label>
                     <input
                       type="number"
                       min={0}
@@ -342,22 +367,8 @@ export default function ActionDetailDrawer({ action, users, onClose, onUpdated }
                       placeholder="R"
                     />
                   </div>
-                  <div className="field">
-                    <label>Estimated timeline / due date (optional)</label>
-                    <input
-                      type="datetime-local"
-                      value={quoteDueDateInput}
-                      onChange={(e) => setQuoteDueDateInput(e.target.value)}
-                    />
-                  </div>
-                  {!action.email && (
-                    <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 8 }}>
-                      ⚠ No email on file for this ticket — we won't be able to email the quote automatically.
-                      Add an email above, or send the client link yourself once you click below.
-                    </div>
-                  )}
-                  <button className="btn btn-primary btn-sm" onClick={sendManualQuote} disabled={busy}>
-                    Send Quote to Client
+                  <button className="btn btn-primary btn-sm" onClick={saveQuoteDetails} disabled={busy}>
+                    Save Quote Details
                   </button>
                 </div>
               )}
