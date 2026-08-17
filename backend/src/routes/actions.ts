@@ -7,6 +7,7 @@ import { nextTicketNumber } from '../lib/ticketNumber';
 import { calculateDueDate } from '../lib/dueDate';
 import { generateQuoteToken } from '../lib/quoteToken';
 import { sendCompletionEmail, sendAcknowledgementEmail, sendQuoteEmail } from '../lib/email';
+import { renderQuotePdf } from '../lib/quotePdf';
 
 const router = Router();
 
@@ -192,6 +193,26 @@ router.get('/:id', requireAuth, async (req, res) => {
     return;
   }
   res.json({ action });
+});
+
+router.get('/:id/quote-pdf', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const action = await prisma.action.findFirst({
+    where: { id, deletedAt: null },
+    include: { client: true }
+  });
+  if (!action) {
+    res.status(404).json({ error: 'Action not found' });
+    return;
+  }
+  if (action.quoteStatus === 'NOT_NEEDED') {
+    res.status(400).json({ error: 'This ticket has no quote to download' });
+    return;
+  }
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="Quote-${action.ticketNumber}.pdf"`);
+  const doc = renderQuotePdf(action);
+  doc.pipe(res);
 });
 
 const createSchema = z.object({
