@@ -37,7 +37,7 @@ export default function FilterBar({
   onToggleFilter,
   onClearAll,
 }: Props) {
-  const [staffOpen, setStaffOpen] = useState(false);
+  const [staffOpen, setStaffOpen] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const hasAnyUser = selectedUserIds.length > 0;
   const hasAnyFilter = selectedFilters.length > 0;
